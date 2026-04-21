@@ -1,0 +1,9 @@
+{
+  "sources": [
+    "contracts/**/*.idl"
+  ],
+  "excludes": [],
+  "targets": {
+    "csharp": {}
+  }
+}

@@ -1,0 +1,28 @@
+# Build output
+**/bin/
+**/obj/
+
+# Local .NET CLI state
+.dotnet/
+.codex
+
+# Crimson project state
+**/.crimson/raw-previous/Generated/
+**/.crimson/raw-current/
+**/.crimson/merge-backup/
+
+# Generated example output
+examples/**/out/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.user
+
+# Temporary files
+*.tmp
+*.temp

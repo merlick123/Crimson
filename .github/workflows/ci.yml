@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Restore and build core
+        run: dotnet build src/Crimson.Core/Crimson.Core.csproj --configuration Release
+
+      - name: Restore and build cli
+        run: dotnet build src/Crimson.Cli/Crimson.Cli.csproj --configuration Release
+
+      - name: Run unit checks
+        run: dotnet run --project tests/Crimson.Tests/Crimson.Tests.csproj --configuration Release
+
+      - name: Run system checks
+        run: dotnet run --project tests/Crimson.SystemTests/Crimson.SystemTests.csproj --configuration Release

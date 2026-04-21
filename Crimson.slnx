@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Crimson.Cli/Crimson.Cli.csproj" />
+    <Project Path="src/Crimson.Core/Crimson.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Crimson.SystemTests/Crimson.SystemTests.csproj" />
+    <Project Path="tests/Crimson.Tests/Crimson.Tests.csproj" />
+  </Folder>
+</Solution>

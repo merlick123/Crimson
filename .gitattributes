@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.cs text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.idl text eol=lf
+*.g4 text eol=lf
