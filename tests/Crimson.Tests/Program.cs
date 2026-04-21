@@ -9,6 +9,16 @@ var tests = new (string Name, Action Body)[]
     ("Emit CSharp files for interface", EmitCSharpFiles),
     ("Validate project catches unresolved types", ValidateProjectCatchesUnresolvedTypes),
     ("Split namespaces across files validate and generate", SplitNamespacesAcrossFilesValidateAndGenerate),
+    ("Interface composition cycle fails with CRIMSON111", InterfaceCompositionCycleFails),
+    ("Multi-level composition emits inherited members", MultiLevelCompositionEmitsInheritedMembers),
+    ("Multi-path composition deduplicates same origin members", MultiPathCompositionDeduplicatesSameOriginMembers),
+    ("Inherited member collision from different origins errors", InheritedMemberCollisionErrors),
+    ("Interface typed parameters returns and containers lower to IName", InterfaceTypedParametersReturnsAndContainersLowerToIName),
+    ("Abstract interfaces emit only interface projections", AbstractInterfacesEmitOnlyInterfaceProjection),
+    ("Nested type resolution through a base contract works", NestedTypeResolutionThroughBaseContractWorks),
+    ("Global dot name resolution works", GlobalDotNameResolutionWorks),
+    ("Relative name resolution prefers nearer scopes", RelativeNameResolutionPrefersNearerScopes),
+    ("Ambiguous type references fail cleanly", AmbiguousTypeReferencesFailCleanly),
 };
 
 var failures = new List<string>();
@@ -169,11 +179,286 @@ namespace SmartHome {
     }
 }
 
+static void InterfaceCompositionCycleFails()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/cycle.idl", """
+namespace Demo {
+    interface Alpha : Beta;
+    interface Beta : Alpha;
+}
+""");
+
+    var exception = Assert.Throws<DiagnosticException>(() => project.Workspace.ValidateProject(project.ProjectFile));
+    Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON111"), "Expected interface composition cycle diagnostic.");
+}
+
+static void MultiLevelCompositionEmitsInheritedMembers()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/device.idl", """
+namespace Demo {
+    abstract interface Device {
+        readonly string device_id;
+    }
+
+    abstract interface Camera : Device {
+        string capture_snapshot();
+    }
+
+    interface Doorbell : Camera {
+        void ring();
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedClass = ReadGenerated(project.Root, "Generated", "Demo", "Doorbell.g.cs");
+    var userStub = ReadGenerated(project.Root, "User", "Demo", "Doorbell.cs");
+
+    Assert.Contains("public string DeviceId", generatedClass);
+    Assert.Contains("public virtual string CaptureSnapshot()", userStub);
+    Assert.Contains("public virtual void Ring()", userStub);
+}
+
+static void MultiPathCompositionDeduplicatesSameOriginMembers()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/eufy.idl", """
+namespace Demo {
+    abstract interface Device {
+        string describe_state();
+    }
+
+    abstract interface Camera : Device {
+        string capture_snapshot();
+    }
+
+    abstract interface Speaker : Device {
+        void play_announcement(string message);
+    }
+
+    interface Eufy : Camera, Speaker;
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var userStub = ReadGenerated(project.Root, "User", "Demo", "Eufy.cs");
+    Assert.Equal(1, CountOccurrences(userStub, "public virtual string DescribeState()"));
+    Assert.Contains("public virtual string CaptureSnapshot()", userStub);
+    Assert.Contains("public virtual void PlayAnnouncement(string message)", userStub);
+}
+
+static void InheritedMemberCollisionErrors()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/conflict.idl", """
+namespace Demo {
+    abstract interface Camera {
+        string status();
+    }
+
+    abstract interface Speaker {
+        string status();
+    }
+
+    interface Eufy : Camera, Speaker;
+}
+""");
+
+    var exception = Assert.Throws<DiagnosticException>(() => project.Workspace.ValidateProject(project.ProjectFile));
+    Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON113"), "Expected inherited member collision diagnostic.");
+}
+
+static void InterfaceTypedParametersReturnsAndContainersLowerToIName()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/registry.idl", """
+namespace Demo {
+    abstract interface Device {
+        string describe();
+    }
+
+    interface Registry {
+        Device get_device(Device device, list<Device> devices, set<Device> device_set, map<string, Device> device_map);
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGenerated(project.Root, "Generated", "Demo", "IRegistry.g.cs");
+    Assert.Contains("IDevice GetDevice(IDevice device, List<IDevice> devices, HashSet<IDevice> deviceSet, Dictionary<string, IDevice> deviceMap);", generatedInterface);
+}
+
+static void AbstractInterfacesEmitOnlyInterfaceProjection()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/device.idl", """
+namespace Demo {
+    abstract interface Device {
+        string describe();
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    Assert.True(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "Generated", "Demo", "IDevice.g.cs")));
+    Assert.False(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "Generated", "Demo", "Device.g.cs")));
+    Assert.False(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "User", "Demo", "Device.cs")));
+}
+
+static void NestedTypeResolutionThroughBaseContractWorks()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/factory.idl", """
+namespace Demo {
+    abstract interface Factory {
+        interface Request {
+            string id;
+        }
+    }
+
+    interface DoorbellFactory : Factory {
+        Request create_request(Request request);
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGenerated(project.Root, "Generated", "Demo", "IDoorbellFactory.g.cs");
+    Assert.Contains("IRequest CreateRequest(IRequest request);", generatedInterface);
+}
+
+static void GlobalDotNameResolutionWorks()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/global.idl", """
+namespace Common {
+    abstract interface Device {
+        string describe();
+    }
+}
+
+namespace Local.Common {
+    abstract interface Device {
+        string local_describe();
+    }
+}
+
+namespace Local.Controllers {
+    interface Registry {
+        .Common.Device get_global_device();
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGenerated(project.Root, "Generated", "Local", "Controllers", "IRegistry.g.cs");
+    Assert.Contains("global::Common.IDevice GetGlobalDevice();", generatedInterface);
+}
+
+static void RelativeNameResolutionPrefersNearerScopes()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/relative.idl", """
+namespace Common {
+    abstract interface Device {
+        string describe();
+    }
+}
+
+namespace Local.Common {
+    abstract interface Device {
+        string local_describe();
+    }
+}
+
+namespace Local.Controllers {
+    interface Registry {
+        Common.Device get_local_device();
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGenerated(project.Root, "Generated", "Local", "Controllers", "IRegistry.g.cs");
+    Assert.Contains("global::Local.Common.IDevice GetLocalDevice();", generatedInterface);
+}
+
+static void AmbiguousTypeReferencesFailCleanly()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/one.idl", """
+namespace Demo {
+    interface Device;
+}
+""");
+    WriteContract(project.Root, "contracts/two.idl", """
+namespace Demo {
+    interface Device;
+}
+""");
+    WriteContract(project.Root, "contracts/registry.idl", """
+namespace Demo {
+    interface Registry {
+        Device get_device();
+    }
+}
+""");
+
+    var exception = Assert.Throws<DiagnosticException>(() => project.Workspace.ValidateProject(project.ProjectFile));
+    Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON100"), "Expected duplicate declaration diagnostic for ambiguous type reference.");
+}
+
 static string CreateTempIdl(string content)
 {
     var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.idl");
     File.WriteAllText(path, content);
     return path;
+}
+
+static TestProject CreateTempProject()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-unit-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "Test.crimsonproj");
+    workspace.InitProject(projectFile, starter: false);
+    return new TestProject(root, projectFile, workspace);
+}
+
+static void WriteContract(string root, string relativePath, string content)
+{
+    var fullPath = Path.Combine(root, relativePath);
+    Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+    File.WriteAllText(fullPath, content);
+}
+
+static string ReadGenerated(string root, params string[] segments)
+{
+    var path = Path.Combine([root, ".crimson", "raw-current", .. segments]);
+    return File.ReadAllText(path);
+}
+
+static int CountOccurrences(string text, string value)
+{
+    var count = 0;
+    var start = 0;
+    while ((start = text.IndexOf(value, start, StringComparison.Ordinal)) >= 0)
+    {
+        count++;
+        start += value.Length;
+    }
+
+    return count;
 }
 
 static class Assert
@@ -210,6 +495,28 @@ static class Assert
         }
     }
 
+    public static void False(bool condition, string? message = null)
+    {
+        if (condition)
+        {
+            throw new InvalidOperationException(message ?? "Expected condition to be false.");
+        }
+    }
+
+    public static T Throws<T>(Action action) where T : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (T exception)
+        {
+            return exception;
+        }
+
+        throw new InvalidOperationException($"Expected exception of type {typeof(T).Name}.");
+    }
+
     public static T IsType<T>(object value)
     {
         if (value is not T typed)
@@ -220,3 +527,5 @@ static class Assert
         return typed;
     }
 }
+
+sealed record TestProject(string Root, string ProjectFile, CrimsonWorkspace Workspace);

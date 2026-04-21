@@ -339,10 +339,25 @@ public sealed class CSharpEmitter
         var resolved = ResolveNamedDeclaration(named, scope);
         return resolved switch
         {
-            InterfaceDeclaration interfaceDeclaration when preferInterfaceContracts => $"I{interfaceDeclaration.Name}",
-            Declaration declaration => declaration.Name,
+            InterfaceDeclaration interfaceDeclaration when preferInterfaceContracts => RenderResolvedTypeName(interfaceDeclaration, scope, $"I{interfaceDeclaration.Name}"),
+            Declaration declaration => RenderResolvedTypeName(declaration, scope, declaration.Name),
             _ => string.Join(".", named.Segments),
         };
+    }
+
+    private static string RenderResolvedTypeName(Declaration declaration, Declaration scope, string localName)
+    {
+        if (declaration.NamespacePath.SequenceEqual(scope.NamespacePath))
+        {
+            return localName;
+        }
+
+        if (declaration.NamespacePath.Count == 0)
+        {
+            return $"global::{localName}";
+        }
+
+        return $"global::{string.Join(".", declaration.NamespacePath)}.{localName}";
     }
 
     private Declaration? ResolveNamedDeclaration(NamedTypeReference named, Declaration scope)

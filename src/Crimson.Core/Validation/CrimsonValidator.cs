@@ -142,6 +142,7 @@ public sealed class CrimsonValidator
         }
 
         _resolvedBaseInterfaces[declaration] = resolvedBases;
+        var inheritedMembers = CollectInheritedMembers(declaration);
 
         foreach (var member in declaration.Members)
         {
@@ -150,16 +151,25 @@ public sealed class CrimsonValidator
                 _diagnostics.Add(new Diagnostic("CRIMSON104", $"Interface '{declaration.QualifiedName}' contains duplicate member '{member.Name}'.", "error", member.Source));
             }
 
+            if (inheritedMembers.TryGetValue(member.Name, out var inheritedOrigin))
+            {
+                _diagnostics.Add(new Diagnostic(
+                    "CRIMSON113",
+                    $"Interface '{declaration.QualifiedName}' redeclares inherited member '{member.Name}' from '{inheritedOrigin.Origin.QualifiedName}'.",
+                    "error",
+                    member.Source));
+            }
+
             switch (member)
             {
                 case ValueMemberDeclaration valueMember:
                     ValidateNonVoidType(valueMember.Type, valueMember.Source, $"Value member '{declaration.QualifiedName}.{valueMember.Name}'");
-                    ValidateTypeReference(valueMember.Type, scope, valueMember.Source);
+                    ValidateTypeReference(valueMember.Type, scope, valueMember.Source, declaration);
                     ValidateLiteralCompatibility(valueMember.Type, valueMember.DefaultValue, valueMember.Source);
                     break;
 
                 case MethodMemberDeclaration methodMember:
-                    ValidateTypeReference(methodMember.ReturnType, scope, methodMember.Source);
+                    ValidateTypeReference(methodMember.ReturnType, scope, methodMember.Source, declaration);
                     var parameterNames = new HashSet<string>(StringComparer.Ordinal);
                     foreach (var parameter in methodMember.Parameters)
                     {
@@ -169,7 +179,7 @@ public sealed class CrimsonValidator
                         }
 
                         ValidateNonVoidType(parameter.Type, parameter.Source, $"Parameter '{declaration.QualifiedName}.{methodMember.Name}({parameter.Name})'");
-                        ValidateTypeReference(parameter.Type, scope, parameter.Source);
+                        ValidateTypeReference(parameter.Type, scope, parameter.Source, declaration);
                         ValidateLiteralCompatibility(parameter.Type, parameter.DefaultValue, parameter.Source);
                     }
 
@@ -177,10 +187,59 @@ public sealed class CrimsonValidator
 
                 case ConstantMemberDeclaration constantMember:
                     ValidateNonVoidType(constantMember.Type, constantMember.Source, $"Constant member '{declaration.QualifiedName}.{constantMember.Name}'");
-                    ValidateTypeReference(constantMember.Type, scope, constantMember.Source);
+                    ValidateTypeReference(constantMember.Type, scope, constantMember.Source, declaration);
                     ValidateLiteralCompatibility(constantMember.Type, constantMember.Value, constantMember.Source);
                     break;
             }
+        }
+    }
+
+    private Dictionary<string, MemberOrigin> CollectInheritedMembers(InterfaceDeclaration declaration)
+    {
+        var inheritedMembers = new Dictionary<string, MemberOrigin>(StringComparer.Ordinal);
+        var visitedOrigins = new HashSet<InterfaceDeclaration>();
+
+        foreach (var baseInterface in _resolvedBaseInterfaces.GetValueOrDefault(declaration, []))
+        {
+            CollectInheritedMembersRecursive(declaration, baseInterface, inheritedMembers, visitedOrigins);
+        }
+
+        return inheritedMembers;
+    }
+
+    private void CollectInheritedMembersRecursive(
+        InterfaceDeclaration target,
+        InterfaceDeclaration origin,
+        Dictionary<string, MemberOrigin> inheritedMembers,
+        HashSet<InterfaceDeclaration> visitedOrigins)
+    {
+        if (!visitedOrigins.Add(origin))
+        {
+            return;
+        }
+
+        foreach (var member in origin.Members)
+        {
+            if (inheritedMembers.TryGetValue(member.Name, out var existing))
+            {
+                if (!ReferenceEquals(existing.Origin, origin))
+                {
+                    _diagnostics.Add(new Diagnostic(
+                        "CRIMSON113",
+                        $"Interface '{target.QualifiedName}' inherits conflicting member '{member.Name}' from '{existing.Origin.QualifiedName}' and '{origin.QualifiedName}'.",
+                        "error",
+                        member.Source));
+                }
+
+                continue;
+            }
+
+            inheritedMembers[member.Name] = new MemberOrigin(origin, member);
+        }
+
+        foreach (var baseInterface in _resolvedBaseInterfaces.GetValueOrDefault(origin, []))
+        {
+            CollectInheritedMembersRecursive(target, baseInterface, inheritedMembers, visitedOrigins);
         }
     }
 
@@ -214,7 +273,7 @@ public sealed class CrimsonValidator
         }
     }
 
-    private void ValidateTypeReference(TypeReference typeReference, IReadOnlyList<string> scope, SourceSpan? source)
+    private void ValidateTypeReference(TypeReference typeReference, IReadOnlyList<string> scope, SourceSpan? source, InterfaceDeclaration? containingInterface = null)
     {
         switch (typeReference)
         {
@@ -223,7 +282,7 @@ public sealed class CrimsonValidator
                 return;
 
             case NamedTypeReference namedType:
-                if (!ResolveNamedType(namedType, scope).Any())
+                if (!ResolveNamedType(namedType, scope, containingInterface).Any())
                 {
                     _diagnostics.Add(new Diagnostic("CRIMSON108", $"Unable to resolve type '{namedType.DisplayName}'.", "error", source ?? namedType.Source));
                 }
@@ -231,26 +290,26 @@ public sealed class CrimsonValidator
                 return;
 
             case ListTypeReference listType:
-                ValidateTypeReference(listType.ElementType, scope, listType.Source);
+                ValidateTypeReference(listType.ElementType, scope, listType.Source, containingInterface);
                 return;
 
             case SetTypeReference setType:
-                ValidateTypeReference(setType.ElementType, scope, setType.Source);
+                ValidateTypeReference(setType.ElementType, scope, setType.Source, containingInterface);
                 return;
 
             case ArrayTypeReference arrayType:
-                ValidateTypeReference(arrayType.ElementType, scope, arrayType.Source);
+                ValidateTypeReference(arrayType.ElementType, scope, arrayType.Source, containingInterface);
                 return;
 
             case MapTypeReference mapType:
-                ValidateTypeReference(mapType.KeyType, scope, mapType.Source);
-                ValidateTypeReference(mapType.ValueType, scope, mapType.Source);
-                ValidateMapKeyType(mapType.KeyType, scope, mapType.Source);
+                ValidateTypeReference(mapType.KeyType, scope, mapType.Source, containingInterface);
+                ValidateTypeReference(mapType.ValueType, scope, mapType.Source, containingInterface);
+                ValidateMapKeyType(mapType.KeyType, scope, mapType.Source, containingInterface);
                 return;
         }
     }
 
-    private void ValidateMapKeyType(TypeReference keyType, IReadOnlyList<string> scope, SourceSpan? source)
+    private void ValidateMapKeyType(TypeReference keyType, IReadOnlyList<string> scope, SourceSpan? source, InterfaceDeclaration? containingInterface = null)
     {
         switch (keyType)
         {
@@ -258,7 +317,7 @@ public sealed class CrimsonValidator
                 return;
 
             case NamedTypeReference namedType:
-                var resolved = ResolveNamedType(namedType, scope).FirstOrDefault();
+                var resolved = ResolveNamedType(namedType, scope, containingInterface).FirstOrDefault();
                 if (resolved is EnumDeclaration)
                 {
                     return;
@@ -337,7 +396,7 @@ public sealed class CrimsonValidator
         stack.Remove(declaration);
     }
 
-    private IEnumerable<Declaration> ResolveNamedType(NamedTypeReference namedType, IReadOnlyList<string> scope)
+    private IEnumerable<Declaration> ResolveNamedType(NamedTypeReference namedType, IReadOnlyList<string> scope, InterfaceDeclaration? containingInterface = null)
     {
         if (namedType.IsGlobal)
         {
@@ -348,6 +407,49 @@ public sealed class CrimsonValidator
         {
             var candidate = scope.Take(index).Concat(namedType.Segments).ToArray();
             var resolved = ResolveExact(candidate).ToArray();
+            if (resolved.Length > 0)
+            {
+                return resolved;
+            }
+        }
+
+        if (containingInterface is not null)
+        {
+            var visitedBases = new HashSet<InterfaceDeclaration>();
+            foreach (var baseInterface in _resolvedBaseInterfaces.GetValueOrDefault(containingInterface, []))
+            {
+                var resolved = ResolveNamedTypeFromBase(namedType, baseInterface, visitedBases).ToArray();
+                if (resolved.Length > 0)
+                {
+                    return resolved;
+                }
+            }
+        }
+
+        return Array.Empty<Declaration>();
+    }
+
+    private IEnumerable<Declaration> ResolveNamedTypeFromBase(NamedTypeReference namedType, InterfaceDeclaration currentInterface, HashSet<InterfaceDeclaration> visitedBases)
+    {
+        if (!visitedBases.Add(currentInterface))
+        {
+            return Array.Empty<Declaration>();
+        }
+
+        var scope = currentInterface.NamespacePath.Concat(currentInterface.ContainingTypes).Concat([currentInterface.Name]).ToArray();
+        for (var index = scope.Length; index >= 0; index--)
+        {
+            var candidate = scope.Take(index).Concat(namedType.Segments).ToArray();
+            var resolved = ResolveExact(candidate).ToArray();
+            if (resolved.Length > 0)
+            {
+                return resolved;
+            }
+        }
+
+        foreach (var baseInterface in _resolvedBaseInterfaces.GetValueOrDefault(currentInterface, []))
+        {
+            var resolved = ResolveNamedTypeFromBase(namedType, baseInterface, visitedBases).ToArray();
             if (resolved.Length > 0)
             {
                 return resolved;
@@ -408,4 +510,6 @@ public sealed class CrimsonValidator
             ArrayTypeReference array => $"{DescribeType(array.ElementType)}[]",
             _ => typeReference.GetType().Name,
         };
+
+    private sealed record MemberOrigin(InterfaceDeclaration Origin, InterfaceMember Member);
 }
