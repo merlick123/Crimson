@@ -34,3 +34,16 @@ jobs:
 
       - name: Run system checks
         run: dotnet run --project tests/Crimson.SystemTests/Crimson.SystemTests.csproj --configuration Release
+
+      - name: Publish crimson CLI
+        run: dotnet publish src/Crimson.Cli/Crimson.Cli.csproj --configuration Release --output .artifacts/crimson
+
+      - name: Validate example project
+        run: |
+          export PATH="$PWD/.artifacts/crimson:$PATH"
+          crimson validate examples/BillingDemo/Billing.crimsonproj
+
+      - name: Run BillingDemo example
+        run: |
+          export PATH="$PWD/.artifacts/crimson:$PATH"
+          dotnet run --project examples/BillingDemo/app/BillingDemo.App.csproj --configuration Release
