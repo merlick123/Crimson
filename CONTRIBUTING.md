@@ -14,6 +14,15 @@ Required tools:
 - .NET SDK 10.0 or later
 - Java 21 or later
 
+## Running From Source
+
+For source-level iteration during development:
+
+```bash
+dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- parse examples/BillingDemo/contracts/customer.idl
+dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- build examples/BillingDemo/Billing.crimsonproj
+```
+
 Build:
 
 ```bash

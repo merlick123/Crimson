@@ -41,22 +41,22 @@ tools/                   local tooling artifacts needed by the build
 
 ## Quick Start
 
-For contributor-style local execution during development:
+After building or installing the `crimson` CLI, initialize a new project:
 
 ```bash
-dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- parse examples/BillingDemo/contracts/customer.idl
-```
-
-Initialize a new project:
-
-```bash
-dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- init Demo.crimsonproj --starter
+crimson init Demo.crimsonproj --starter
 ```
 
 Build the included example project:
 
 ```bash
-dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- build examples/BillingDemo/Billing.crimsonproj
+crimson build examples/BillingDemo/Billing.crimsonproj
+```
+
+Parse an IDL file to JSON:
+
+```bash
+crimson parse examples/BillingDemo/contracts/customer.idl
 ```
 
 ## Build From Source
@@ -68,6 +68,14 @@ dotnet publish src/Crimson.Cli/Crimson.Cli.csproj -c Release -o .artifacts/crims
 ```
 
 That produces a local build of the `crimson` CLI under `.artifacts/crimson/`.
+
+Depending on your platform, the published executable will be named either:
+
+- `crimson`
+- `Crimson.Cli`
+- `Crimson.Cli.exe`
+
+If you want a stable command name, create a symlink or shell alias named `crimson` that points at the published executable.
 
 If you want a single self-contained executable for a specific platform:
 
@@ -104,6 +112,8 @@ The intended distribution model is:
 - release binaries can be published as GitHub release artifacts for supported platforms
 
 ## Development
+
+Crimson contributors should use the workflow documented in `CONTRIBUTING.md`.
 
 Build the main projects:
 
