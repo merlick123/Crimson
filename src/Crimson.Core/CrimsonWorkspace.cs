@@ -56,6 +56,7 @@ public sealed class CrimsonWorkspace
         Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-current"));
         Directory.CreateDirectory(Path.Combine(directory, ".crimson", "merge-backup"));
         CSharpBuildIntegration.Write(directory);
+        EnsureGitIgnore(directory);
 
         if (starter)
         {
@@ -137,6 +138,33 @@ public sealed class CrimsonWorkspace
         }
 
         Directory.CreateDirectory(path);
+    }
+
+    private static void EnsureGitIgnore(string projectDirectory)
+    {
+        var gitIgnorePath = Path.Combine(projectDirectory, ".gitignore");
+        var requiredEntries = new[]
+        {
+            ".crimson/raw-previous/Generated/",
+            ".crimson/raw-current/",
+            ".crimson/merge-backup/",
+        };
+
+        if (!File.Exists(gitIgnorePath))
+        {
+            File.WriteAllText(gitIgnorePath, string.Join(Environment.NewLine, requiredEntries) + Environment.NewLine);
+            return;
+        }
+
+        var existingLines = new HashSet<string>(File.ReadAllLines(gitIgnorePath), StringComparer.Ordinal);
+        var missingEntries = requiredEntries.Where(entry => !existingLines.Contains(entry)).ToArray();
+        if (missingEntries.Length == 0)
+        {
+            return;
+        }
+
+        var prefix = File.ReadAllText(gitIgnorePath).EndsWith(Environment.NewLine, StringComparison.Ordinal) ? string.Empty : Environment.NewLine;
+        File.AppendAllText(gitIgnorePath, prefix + string.Join(Environment.NewLine, missingEntries) + Environment.NewLine);
     }
 
     private const string StarterIdl = """

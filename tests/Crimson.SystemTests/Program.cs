@@ -6,6 +6,8 @@ var failures = new List<string>();
 Run("Init build pipeline creates project output", BuildPipelineCreatesOutput);
 Run("Build heals missing user files", BuildHealsMissingUserFiles);
 Run("Init writes reusable MSBuild integration", InitWritesMsBuildIntegration);
+Run("Init creates gitignore entries", InitCreatesGitIgnoreEntries);
+Run("Init target name resolves to project file path", InitTargetNameResolvesToProjectFilePath);
 return failures.Count == 0 ? 0 : 1;
 
 void Run(string name, Action body)
@@ -139,5 +141,48 @@ void InitWritesMsBuildIntegration()
     if (!File.Exists(targets))
     {
         throw new InvalidOperationException("MSBuild targets file was not created.");
+    }
+}
+
+void InitCreatesGitIgnoreEntries()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "Billing.crimsonproj");
+    workspace.InitProject(projectFile, starter: false);
+
+    var gitIgnore = Path.Combine(root, ".gitignore");
+    if (!File.Exists(gitIgnore))
+    {
+        throw new InvalidOperationException(".gitignore was not created.");
+    }
+
+    var contents = File.ReadAllText(gitIgnore);
+    AssertContains(".crimson/raw-previous/Generated/", contents);
+    AssertContains(".crimson/raw-current/", contents);
+    AssertContains(".crimson/merge-backup/", contents);
+}
+
+void InitTargetNameResolvesToProjectFilePath()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var resolved = Crimson.Core.Projects.CrimsonProjectFile.ResolveInitProjectFilePath("BillingDemo", root);
+    var expected = Path.Combine(root, "BillingDemo", "BillingDemo.crimsonproj");
+
+    if (!string.Equals(resolved, expected, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException($"Expected '{expected}' but found '{resolved}'.");
+    }
+}
+
+void AssertContains(string expectedSubstring, string actual)
+{
+    if (!actual.Contains(expectedSubstring, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException($"Expected to find '{expectedSubstring}' in output.");
     }
 }

@@ -1,6 +1,7 @@
 using Crimson.Core;
 using Crimson.Core.Model;
 using Crimson.Core.Merge;
+using Crimson.Core.Projects;
 
 var workspace = new CrimsonWorkspace();
 
@@ -9,11 +10,19 @@ try
     if (args.Length == 0)
     {
         PrintUsage();
-        return 1;
+        return 0;
     }
 
     switch (args[0])
     {
+        case "help":
+        case "--help":
+        case "-h":
+        {
+            PrintUsage();
+            return 0;
+        }
+
         case "parse":
         {
             var file = RequireArgument(args, 1, "Expected a .idl file path.");
@@ -24,14 +33,11 @@ try
 
         case "init":
         {
-            var projectFile = RequireArgument(args, 1, "Expected a .crimsonproj path.");
+            var target = RequireArgument(args, 1, "Expected a project name or .crimsonproj path.");
+            var projectFile = CrimsonProjectFile.ResolveInitProjectFilePath(target, Environment.CurrentDirectory);
             var starter = args.Contains("--starter", StringComparer.Ordinal);
             workspace.InitProject(projectFile, starter);
             Console.WriteLine($"Initialized {projectFile}");
-            Console.WriteLine("Recommended .gitignore entries:");
-            Console.WriteLine(".crimson/raw-previous/Generated/");
-            Console.WriteLine(".crimson/raw-current/");
-            Console.WriteLine(".crimson/merge-backup/");
             return 0;
         }
 
@@ -121,10 +127,27 @@ static string FormatDiagnostic(Diagnostic diagnostic)
 
 static void PrintUsage()
 {
-    Console.WriteLine("crimson parse <file.idl>");
-    Console.WriteLine("crimson init <project.crimsonproj> [--starter]");
-    Console.WriteLine("crimson validate <project.crimsonproj>");
-    Console.WriteLine("crimson generate <project.crimsonproj>");
-    Console.WriteLine("crimson merge <project.crimsonproj>");
-    Console.WriteLine("crimson build <project.crimsonproj>");
+    Console.WriteLine("Crimson CLI");
+    Console.WriteLine();
+    Console.WriteLine("Usage:");
+    Console.WriteLine("  crimson init <project-name|path> [--starter]");
+    Console.WriteLine("  crimson parse <file.idl>");
+    Console.WriteLine("  crimson validate <project.crimsonproj>");
+    Console.WriteLine("  crimson generate <project.crimsonproj>");
+    Console.WriteLine("  crimson merge <project.crimsonproj>");
+    Console.WriteLine("  crimson build <project.crimsonproj>");
+    Console.WriteLine("  crimson help");
+    Console.WriteLine();
+    Console.WriteLine("Commands:");
+    Console.WriteLine("  init      Create a new Crimson project directory, project file, state folder, and .gitignore.");
+    Console.WriteLine("  parse     Parse a single .idl file and emit the typed JSON AST.");
+    Console.WriteLine("  validate  Parse and validate a Crimson project without generating output.");
+    Console.WriteLine("  generate  Generate staged raw output into .crimson/raw-current.");
+    Console.WriteLine("  merge     Merge staged output into the live project tree.");
+    Console.WriteLine("  build     Generate and merge in one step.");
+    Console.WriteLine();
+    Console.WriteLine("Examples:");
+    Console.WriteLine("  crimson init BillingDemo --starter");
+    Console.WriteLine("  crimson validate BillingDemo/BillingDemo.crimsonproj");
+    Console.WriteLine("  crimson build examples/BillingDemo/Billing.crimsonproj");
 }

@@ -42,6 +42,28 @@ public sealed class CrimsonProjectFile
         };
     }
 
+    public static string ResolveInitProjectFilePath(string target, string currentDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            throw new InvalidOperationException("Expected a project name or .crimsonproj path.");
+        }
+
+        if (target.EndsWith(".crimsonproj", StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.GetFullPath(target, currentDirectory);
+        }
+
+        var projectDirectory = Path.GetFullPath(target, currentDirectory);
+        var projectName = Path.GetFileName(projectDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(projectName))
+        {
+            throw new InvalidOperationException("Expected a project name or .crimsonproj path.");
+        }
+
+        return Path.Combine(projectDirectory, $"{projectName}.crimsonproj");
+    }
+
     public IEnumerable<string> ResolveSourceFiles()
     {
         var includeGlobs = Project.Sources.Select(static x => new SimpleGlob(x)).ToArray();

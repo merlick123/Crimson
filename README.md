@@ -46,7 +46,7 @@ tools/                   local tooling artifacts needed by the build
 After building or installing the `crimson` CLI, initialize a new project:
 
 ```bash
-crimson init Demo.crimsonproj --starter
+crimson init Demo --starter
 ```
 
 Build the included example project:
