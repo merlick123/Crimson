@@ -13,22 +13,22 @@ namespace SmartHome {
         string describe_state();
     }
 
-    abstract interface Camera {
+    abstract interface Camera : Device {
         /// Captures a short human-readable snapshot.
         string capture_snapshot();
     }
 
-    abstract interface MotionSensor {
+    abstract interface MotionSensor : Device {
         /// Indicates whether motion is currently detected.
         readonly bool motion_detected;
     }
 
-    abstract interface Doorbell {
+    abstract interface Doorbell : Device {
         /// Rings or chimes the doorbell.
         void ring();
     }
 
-    abstract interface Light {
+    abstract interface Light : Device {
         /// Current brightness level.
         int32 brightness_percent = 0;
 
@@ -37,7 +37,7 @@ namespace SmartHome {
         void set_brightness(int32 value);
     }
 
-    abstract interface Thermostat {
+    abstract interface Thermostat : Device {
         /// Preferred temperature target.
         float64 target_temperature = 21;
 
@@ -45,7 +45,7 @@ namespace SmartHome {
         float64 read_temperature();
     }
 
-    abstract interface Speaker {
+    abstract interface Speaker : Device {
         /// Plays or queues an announcement.
         /// @param message The message to speak.
         void play_announcement(string message);
