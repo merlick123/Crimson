@@ -52,19 +52,19 @@ crimson init Demo --starter
 Build the included example project:
 
 ```bash
-crimson build examples/BillingDemo/Billing.crimsonproj
+crimson build examples/SmartHomeDemo/SmartHome.crimsonproj
 ```
 
 Validate a project:
 
 ```bash
-crimson validate examples/BillingDemo/Billing.crimsonproj
+crimson validate examples/SmartHomeDemo/SmartHome.crimsonproj
 ```
 
 Parse an IDL file to JSON:
 
 ```bash
-crimson parse examples/BillingDemo/contracts/customer.idl
+crimson parse examples/SmartHomeDemo/contracts/home.idl
 ```
 
 ## Build From Source
@@ -159,14 +159,15 @@ curl -L -o tools/antlr-4.13.1-complete.jar https://www.antlr.org/download/antlr-
 
 ## Example
 
-An example project is included in `examples/BillingDemo`.
+An example project is included in `examples/SmartHomeDemo`.
 
 It demonstrates:
 
 - generated C# interfaces and class plumbing
 - user-owned code under `src/User`
 - automatic Crimson-triggered regeneration from a consuming C# project
-- swapping two implementations behind `ICustomerService`
+- swapping multiple implementations behind `IHomeController`
+- querying device features and tracing automation chains across the home
 
 ## Contributing
 

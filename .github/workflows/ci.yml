@@ -41,9 +41,9 @@ jobs:
       - name: Validate example project
         run: |
           export PATH="$PWD/.artifacts/crimson:$PATH"
-          crimson validate examples/BillingDemo/Billing.crimsonproj
+          crimson validate examples/SmartHomeDemo/SmartHome.crimsonproj
 
-      - name: Run BillingDemo example
+      - name: Run SmartHomeDemo example
         run: |
           export PATH="$PWD/.artifacts/crimson:$PATH"
-          dotnet run --project examples/BillingDemo/app/BillingDemo.App.csproj --configuration Release
+          dotnet run --project examples/SmartHomeDemo/app/SmartHomeDemo.App.csproj --configuration Release

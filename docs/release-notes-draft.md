@@ -7,10 +7,11 @@ This draft is intended for the first reviewed public release after the current f
 - Added semantic project validation with `crimson validate`.
 - Improved CLI diagnostics and build workflow polish.
 - Extracted reusable C# MSBuild integration for Crimson-generated projects.
-- Upgraded BillingDemo into a stronger end-to-end example with:
+- Replaced the old sample with SmartHomeDemo, a stronger end-to-end example with:
   - automatic Crimson-triggered regeneration
   - generated/user-owned C# split
-  - swappable implementations through `ICustomerService`
+  - swappable implementations through `IHomeController`
+  - feature queries and automation-chain tracing
 - Tightened generated C# customization hooks for value members.
 
 ## Current Scope
@@ -36,6 +37,6 @@ Crimson currently focuses on a coherent C# vertical slice:
 ```bash
 dotnet publish src/Crimson.Cli/Crimson.Cli.csproj -c Release -o .artifacts/crimson
 export PATH="$PWD/.artifacts/crimson:$PATH"
-crimson validate examples/BillingDemo/Billing.crimsonproj
-dotnet run --project examples/BillingDemo/app/BillingDemo.App.csproj
+crimson validate examples/SmartHomeDemo/SmartHome.crimsonproj
+dotnet run --project examples/SmartHomeDemo/app/SmartHomeDemo.App.csproj
 ```

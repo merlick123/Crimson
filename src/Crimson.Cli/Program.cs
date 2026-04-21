@@ -147,7 +147,7 @@ static void PrintUsage()
     Console.WriteLine("  build     Generate and merge in one step.");
     Console.WriteLine();
     Console.WriteLine("Examples:");
-    Console.WriteLine("  crimson init BillingDemo --starter");
-    Console.WriteLine("  crimson validate BillingDemo/BillingDemo.crimsonproj");
-    Console.WriteLine("  crimson build examples/BillingDemo/Billing.crimsonproj");
+    Console.WriteLine("  crimson init SmartHomeDemo --starter");
+    Console.WriteLine("  crimson validate examples/SmartHomeDemo/SmartHome.crimsonproj");
+    Console.WriteLine("  crimson build examples/SmartHomeDemo/SmartHome.crimsonproj");
 }
