@@ -10,7 +10,7 @@ public sealed record CrimsonProject(
 
 public sealed record CSharpTargetOptions(string OutputRoot)
 {
-    public static CSharpTargetOptions Default => new("out/csharp");
+    public static CSharpTargetOptions Default => new("src");
 }
 
 public sealed class CrimsonProjectFile

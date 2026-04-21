@@ -4,6 +4,8 @@
   ],
   "excludes": [],
   "targets": {
-    "csharp": {}
+    "csharp": {
+      "output": "src"
+    }
   }
 }

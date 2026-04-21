@@ -9,8 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\out\csharp\project\Generated\**\*.cs" Link="Generated\%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="..\out\csharp\project\User\**\*.cs" Link="User\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../src/Generated/**/*.cs" Link="Generated/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../src/User/**/*.cs" Link="User/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

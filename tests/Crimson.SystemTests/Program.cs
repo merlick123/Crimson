@@ -47,8 +47,8 @@ namespace Billing.Contracts {
         throw new InvalidOperationException("Build reported merge conflicts unexpectedly.");
     }
 
-    var generated = Path.Combine(root, "out", "csharp", "project", "Generated", "Billing", "Contracts", "CustomerService.g.cs");
-    var user = Path.Combine(root, "out", "csharp", "project", "User", "Billing", "Contracts", "CustomerService.cs");
+    var generated = Path.Combine(root, "src", "Generated", "Billing", "Contracts", "CustomerService.g.cs");
+    var user = Path.Combine(root, "src", "User", "Billing", "Contracts", "CustomerService.cs");
 
     if (!File.Exists(generated))
     {
@@ -64,6 +64,12 @@ namespace Billing.Contracts {
     if (!projectJson.TryGetProperty("sources", out _))
     {
         throw new InvalidOperationException("Project file was not initialized correctly.");
+    }
+
+    var output = projectJson.GetProperty("targets").GetProperty("csharp").GetProperty("output").GetString();
+    if (!string.Equals(output, "src", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Project file did not include the default csharp output root.");
     }
 }
 
@@ -92,7 +98,7 @@ namespace Billing.Contracts {
         throw new InvalidOperationException("Initial build reported merge conflicts unexpectedly.");
     }
 
-    var userFile = Path.Combine(root, "out", "csharp", "project", "User", "Billing", "Contracts", "CustomerService.cs");
+    var userFile = Path.Combine(root, "src", "User", "Billing", "Contracts", "CustomerService.cs");
     if (!File.Exists(userFile))
     {
         throw new InvalidOperationException("User file was not created on initial build.");

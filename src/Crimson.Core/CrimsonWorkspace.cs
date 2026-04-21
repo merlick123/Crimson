@@ -33,7 +33,10 @@ public sealed class CrimsonWorkspace
             excludes = Array.Empty<string>(),
             targets = new
             {
-                csharp = new { },
+                csharp = new
+                {
+                    output = "src",
+                },
             },
         };
 
@@ -73,7 +76,7 @@ public sealed class CrimsonWorkspace
         var rawPrevious = Path.Combine(stateRoot, "raw-previous");
         var rawCurrent = Path.Combine(stateRoot, "raw-current");
         var backupRoot = Path.Combine(stateRoot, "merge-backup");
-        var projectRoot = Path.Combine(project.ProjectDirectory, options.OutputRoot, "project");
+        var projectRoot = Path.Combine(project.ProjectDirectory, options.OutputRoot);
 
         Directory.CreateDirectory(rawPrevious);
         Directory.CreateDirectory(rawCurrent);

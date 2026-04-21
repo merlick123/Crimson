@@ -11,8 +11,8 @@ crimson build examples/BillingDemo/Billing.crimsonproj
 Generated output appears under:
 
 ```txt
-out/csharp/project/Generated
-out/csharp/project/User
+src/Generated
+src/User
 ```
 
 The example also includes a small runnable .NET app that consumes the generated output:
