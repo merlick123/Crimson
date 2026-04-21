@@ -1,6 +1,7 @@
 # Build output
 **/bin/
 **/obj/
+.artifacts/
 
 # Local .NET CLI state
 .dotnet/

@@ -21,6 +21,18 @@ dotnet build src/Crimson.Core/Crimson.Core.csproj
 dotnet build src/Crimson.Cli/Crimson.Cli.csproj
 ```
 
+Publish a runnable local CLI build:
+
+```bash
+./scripts/publish.sh
+```
+
+Or publish a self-contained single-file build for a target runtime:
+
+```bash
+./scripts/publish-self-contained.sh linux-x64
+```
+
 Run tests:
 
 ```bash

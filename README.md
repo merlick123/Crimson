@@ -41,16 +41,16 @@ tools/                   local tooling artifacts needed by the build
 
 ## Quick Start
 
+For contributor-style local execution during development:
+
+```bash
+dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- parse examples/BillingDemo/contracts/customer.idl
+```
+
 Initialize a new project:
 
 ```bash
 dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- init Demo.crimsonproj --starter
-```
-
-Parse an IDL file to JSON:
-
-```bash
-dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- parse examples/BillingDemo/contracts/customer.idl
 ```
 
 Build the included example project:
@@ -58,6 +58,50 @@ Build the included example project:
 ```bash
 dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- build examples/BillingDemo/Billing.crimsonproj
 ```
+
+## Build From Source
+
+To build a runnable Crimson CLI from source for your own machine:
+
+```bash
+dotnet publish src/Crimson.Cli/Crimson.Cli.csproj -c Release -o .artifacts/crimson
+```
+
+That produces a local build of the `crimson` CLI under `.artifacts/crimson/`.
+
+If you want a single self-contained executable for a specific platform:
+
+```bash
+dotnet publish src/Crimson.Cli/Crimson.Cli.csproj \
+  -c Release \
+  -r linux-x64 \
+  --self-contained true \
+  -p:PublishSingleFile=true \
+  -o .artifacts/crimson-linux-x64
+```
+
+You can then add the published directory to your `PATH` or symlink the resulting executable.
+
+Helper scripts are included:
+
+```bash
+./scripts/publish.sh
+./scripts/publish-self-contained.sh linux-x64
+```
+
+Common runtime identifiers:
+
+- `linux-x64`
+- `win-x64`
+- `osx-arm64`
+- `osx-x64`
+
+## Releases
+
+The intended distribution model is:
+
+- developers can build Crimson from source with `dotnet publish`
+- release binaries can be published as GitHub release artifacts for supported platforms
 
 ## Development
 
@@ -73,6 +117,12 @@ Run verification:
 ```bash
 dotnet run --project tests/Crimson.Tests/Crimson.Tests.csproj
 dotnet run --project tests/Crimson.SystemTests/Crimson.SystemTests.csproj
+```
+
+Publish a local release-style build:
+
+```bash
+./scripts/publish.sh
 ```
 
 Regenerate the parser after changing the grammar:
