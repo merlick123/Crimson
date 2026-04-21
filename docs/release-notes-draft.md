@@ -10,7 +10,7 @@ This draft is intended for the first reviewed public release after the current f
 - Replaced the old sample with SmartHomeDemo, a stronger end-to-end example with:
   - automatic Crimson-triggered regeneration
   - generated/user-owned C# split
-  - swappable implementations through `IHomeController`
+  - capability-based swappability through `IDevice` and `IDemoHomeRuntime`
   - feature queries and automation-chain tracing
 - Tightened generated C# customization hooks for value members.
 

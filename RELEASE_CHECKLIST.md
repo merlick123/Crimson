@@ -8,7 +8,7 @@ Use this checklist before cutting a tagged Crimson release.
 - `examples/SmartHomeDemo` still demonstrates the intended first-release story:
   - generated/user code split
   - automatic C# build integration
-  - swappability through `IHomeController`
+  - capability-based swappability through `IDevice` and `IDemoHomeRuntime`
   - feature discovery and device-chain tracing
 - The current scope is still intentionally limited to the C# target.
 

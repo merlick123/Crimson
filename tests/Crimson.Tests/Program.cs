@@ -8,6 +8,7 @@ var tests = new (string Name, Action Body)[]
     ("Parse interface with docs and members", ParseInterfaceWithDocs),
     ("Emit CSharp files for interface", EmitCSharpFiles),
     ("Validate project catches unresolved types", ValidateProjectCatchesUnresolvedTypes),
+    ("Split namespaces across files validate and generate", SplitNamespacesAcrossFilesValidateAndGenerate),
 };
 
 var failures = new List<string>();
@@ -129,6 +130,42 @@ namespace Demo.Contracts {
     catch (DiagnosticException exception)
     {
         Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON108"), "Expected unresolved type diagnostic.");
+    }
+}
+
+static void SplitNamespacesAcrossFilesValidateAndGenerate()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-unit-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "SmartHome.crimsonproj");
+    workspace.InitProject(projectFile, starter: false);
+
+    Directory.CreateDirectory(Path.Combine(root, "contracts", "core"));
+    Directory.CreateDirectory(Path.Combine(root, "contracts", "vendors"));
+
+    File.WriteAllText(Path.Combine(root, "contracts", "core", "capabilities.idl"), """
+namespace SmartHome {
+    abstract interface Device {
+        string describe();
+    }
+}
+""");
+
+    File.WriteAllText(Path.Combine(root, "contracts", "vendors", "vendor.idl"), """
+namespace SmartHome {
+    interface DemoCamera : Device;
+}
+""");
+
+    workspace.ValidateProject(projectFile);
+    workspace.Generate(projectFile);
+
+    var generatedInterface = Path.Combine(root, ".crimson", "raw-current", "Generated", "SmartHome", "IDemoCamera.g.cs");
+    if (!File.Exists(generatedInterface))
+    {
+        throw new InvalidOperationException("Expected generated interface output for split namespace declarations.");
     }
 }
 

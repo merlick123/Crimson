@@ -11,8 +11,16 @@ public sealed record GeneratedTargetTree(
 
 public sealed class CSharpEmitter
 {
+    private Dictionary<string, Declaration> _declarationsByQualifiedName = new(StringComparer.Ordinal);
+
     public GeneratedTargetTree Emit(CompilationSetModel compilation)
     {
+        _declarationsByQualifiedName = compilation.Files
+            .SelectMany(static file => EnumerateDeclarations(file.Declarations))
+            .Where(static declaration => declaration is not NamespaceDeclaration)
+            .GroupBy(static declaration => declaration.QualifiedName, StringComparer.Ordinal)
+            .ToDictionary(static declarations => declarations.Key, static declarations => declarations.First(), StringComparer.Ordinal);
+
         var generatedFiles = new List<GeneratedFile>();
         var userFiles = new List<GeneratedFile>();
 
@@ -74,17 +82,24 @@ public sealed class CSharpEmitter
             : Path.Combine(Path.Combine(segments), fileName);
     }
 
-    private static string RenderContractInterface(InterfaceDeclaration declaration)
+    private string RenderContractInterface(InterfaceDeclaration declaration)
     {
         var builder = new StringBuilder();
         var namespaceName = string.Join(".", declaration.NamespacePath);
         var baseNames = declaration.BaseContracts.Count == 0
             ? string.Empty
-            : " : " + string.Join(", ", declaration.BaseContracts.Select(RenderType));
+            : " : " + string.Join(", ", declaration.BaseContracts.Select(baseContract => RenderContractType(baseContract, declaration)));
 
         if (!string.IsNullOrEmpty(namespaceName))
         {
+            builder.AppendLine("using System.Collections.Generic;");
+            builder.AppendLine();
             builder.AppendLine($"namespace {namespaceName};");
+            builder.AppendLine();
+        }
+        else
+        {
+            builder.AppendLine("using System.Collections.Generic;");
             builder.AppendLine();
         }
 
@@ -98,13 +113,13 @@ public sealed class CSharpEmitter
             {
                 case ValueMemberDeclaration valueMember when !valueMember.IsInternal:
                     AppendDocs(builder, valueMember.Documentation, 1);
-                    builder.AppendLine($"    {RenderType(valueMember.Type)} {ToPascalCase(valueMember.Name)} {{ get;{(valueMember.IsReadonly ? string.Empty : " set;")} }}");
+                    builder.AppendLine($"    {RenderContractType(valueMember.Type, declaration)} {ToPascalCase(valueMember.Name)} {{ get;{(valueMember.IsReadonly ? string.Empty : " set;")} }}");
                     builder.AppendLine();
                     break;
 
                 case MethodMemberDeclaration methodMember:
                     AppendDocs(builder, methodMember.Documentation, 1);
-                    builder.AppendLine($"    {RenderType(methodMember.ReturnType)} {ToPascalCase(methodMember.Name)}({RenderParameters(methodMember.Parameters)});");
+                    builder.AppendLine($"    {RenderContractType(methodMember.ReturnType, declaration)} {ToPascalCase(methodMember.Name)}({RenderParameters(methodMember.Parameters, declaration)});");
                     builder.AppendLine();
                     break;
             }
@@ -114,7 +129,7 @@ public sealed class CSharpEmitter
         return builder.ToString().TrimEnd() + Environment.NewLine;
     }
 
-    private static string RenderGeneratedClass(InterfaceDeclaration declaration)
+    private string RenderGeneratedClass(InterfaceDeclaration declaration)
     {
         var builder = new StringBuilder();
         var namespaceName = string.Join(".", declaration.NamespacePath);
@@ -137,10 +152,10 @@ public sealed class CSharpEmitter
         builder.AppendLine($"public partial class {declaration.Name} : I{declaration.Name}");
         builder.AppendLine("{");
 
-        foreach (var valueMember in declaration.Members.OfType<ValueMemberDeclaration>())
+        foreach (var valueMember in GetEffectiveMembers(declaration).OfType<ValueMemberDeclaration>())
         {
             var fieldName = $"_{ToCamelCase(valueMember.Name)}";
-            builder.AppendLine($"    private {RenderType(valueMember.Type)} {fieldName} = {RenderDefaultValue(valueMember.Type, valueMember.DefaultValue)};");
+            builder.AppendLine($"    private {RenderContractType(valueMember.Type, declaration)} {fieldName} = {RenderDefaultValue(valueMember.Type, valueMember.DefaultValue, declaration)};");
             builder.AppendLine();
 
             var visibility = valueMember.IsInternal ? "protected" : "public";
@@ -151,7 +166,7 @@ public sealed class CSharpEmitter
                     : "set";
 
             AppendDocs(builder, valueMember.Documentation, 1);
-            builder.AppendLine($"    {visibility} {RenderType(valueMember.Type)} {ToPascalCase(valueMember.Name)}");
+            builder.AppendLine($"    {visibility} {RenderContractType(valueMember.Type, declaration)} {ToPascalCase(valueMember.Name)}");
             builder.AppendLine("    {");
             builder.AppendLine("        get");
             builder.AppendLine("        {");
@@ -168,9 +183,9 @@ public sealed class CSharpEmitter
             builder.AppendLine("        }");
             builder.AppendLine("    }");
             builder.AppendLine();
-            builder.AppendLine($"    partial void On{ToPascalCase(valueMember.Name)}Getting(ref {RenderType(valueMember.Type)} value);");
-            builder.AppendLine($"    partial void On{ToPascalCase(valueMember.Name)}Setting(ref {RenderType(valueMember.Type)} value);");
-            builder.AppendLine($"    partial void On{ToPascalCase(valueMember.Name)}Set({RenderType(valueMember.Type)} value);");
+            builder.AppendLine($"    partial void On{ToPascalCase(valueMember.Name)}Getting(ref {RenderContractType(valueMember.Type, declaration)} value);");
+            builder.AppendLine($"    partial void On{ToPascalCase(valueMember.Name)}Setting(ref {RenderContractType(valueMember.Type, declaration)} value);");
+            builder.AppendLine($"    partial void On{ToPascalCase(valueMember.Name)}Set({RenderContractType(valueMember.Type, declaration)} value);");
             builder.AppendLine();
         }
 
@@ -178,12 +193,13 @@ public sealed class CSharpEmitter
         return builder.ToString().TrimEnd() + Environment.NewLine;
     }
 
-    private static string RenderUserClass(InterfaceDeclaration declaration)
+    private string RenderUserClass(InterfaceDeclaration declaration)
     {
         var builder = new StringBuilder();
         var namespaceName = string.Join(".", declaration.NamespacePath);
 
         builder.AppendLine("using System;");
+        builder.AppendLine("using System.Collections.Generic;");
         builder.AppendLine();
 
         if (!string.IsNullOrEmpty(namespaceName))
@@ -199,10 +215,10 @@ public sealed class CSharpEmitter
         builder.AppendLine("    }");
         builder.AppendLine();
 
-        foreach (var method in declaration.Members.OfType<MethodMemberDeclaration>())
+        foreach (var method in GetEffectiveMembers(declaration).OfType<MethodMemberDeclaration>())
         {
             AppendDocs(builder, method.Documentation, 1);
-            builder.AppendLine($"    public virtual {RenderType(method.ReturnType)} {ToPascalCase(method.Name)}({RenderParameters(method.Parameters)})");
+            builder.AppendLine($"    public virtual {RenderContractType(method.ReturnType, declaration)} {ToPascalCase(method.Name)}({RenderParameters(method.Parameters, declaration)})");
             builder.AppendLine("    {");
             builder.AppendLine("        throw new NotImplementedException();");
             builder.AppendLine("    }");
@@ -236,7 +252,7 @@ public sealed class CSharpEmitter
         return builder.ToString().TrimEnd() + Environment.NewLine;
     }
 
-    private static string RenderConstantHolder(ConstantDeclaration declaration)
+    private string RenderConstantHolder(ConstantDeclaration declaration)
     {
         var builder = new StringBuilder();
         var namespaceName = string.Join(".", declaration.NamespacePath);
@@ -248,12 +264,15 @@ public sealed class CSharpEmitter
 
         builder.AppendLine($"public static class {declaration.Name}");
         builder.AppendLine("{");
-        builder.AppendLine($"    public const {RenderType(declaration.Type)} Value = {RenderLiteral(declaration.Value ?? new StringLiteralValue(string.Empty, null))};");
+        builder.AppendLine($"    public const {RenderContractType(declaration.Type, declaration)} Value = {RenderLiteral(declaration.Value ?? new StringLiteralValue(string.Empty, null))};");
         builder.AppendLine("}");
         return builder.ToString().TrimEnd() + Environment.NewLine;
     }
 
-    private static string RenderType(TypeReference type) =>
+    private string RenderContractType(TypeReference type, Declaration scope) =>
+        RenderType(type, scope, preferInterfaceContracts: true);
+
+    private string RenderType(TypeReference type, Declaration scope, bool preferInterfaceContracts) =>
         type switch
         {
             VoidTypeReference => "void",
@@ -273,19 +292,19 @@ public sealed class CSharpEmitter
                 "float64" => "double",
                 _ => primitive.Name,
             },
-            NamedTypeReference named => string.Join(".", named.Segments),
-            ListTypeReference list => $"List<{RenderType(list.ElementType)}>",
-            SetTypeReference set => $"HashSet<{RenderType(set.ElementType)}>",
-            MapTypeReference map => $"Dictionary<{RenderType(map.KeyType)}, {RenderType(map.ValueType)}>",
-            ArrayTypeReference array => $"{RenderType(array.ElementType)}[]",
+            NamedTypeReference named => RenderNamedType(named, scope, preferInterfaceContracts),
+            ListTypeReference list => $"List<{RenderType(list.ElementType, scope, preferInterfaceContracts)}>",
+            SetTypeReference set => $"HashSet<{RenderType(set.ElementType, scope, preferInterfaceContracts)}>",
+            MapTypeReference map => $"Dictionary<{RenderType(map.KeyType, scope, preferInterfaceContracts)}, {RenderType(map.ValueType, scope, preferInterfaceContracts)}>",
+            ArrayTypeReference array => $"{RenderType(array.ElementType, scope, preferInterfaceContracts)}[]",
             _ => throw new NotSupportedException($"Unsupported type: {type.GetType().Name}"),
         };
 
-    private static string RenderParameters(IEnumerable<MethodParameter> parameters) =>
+    private string RenderParameters(IEnumerable<MethodParameter> parameters, Declaration scope) =>
         string.Join(", ", parameters.Select(parameter =>
         {
             var defaultValue = parameter.DefaultValue is null ? string.Empty : $" = {RenderLiteral(parameter.DefaultValue)}";
-            return $"{RenderType(parameter.Type)} {ToCamelCase(parameter.Name)}{defaultValue}";
+            return $"{RenderContractType(parameter.Type, scope)} {ToCamelCase(parameter.Name)}{defaultValue}";
         }));
 
     private static string RenderLiteral(LiteralValue literal) =>
@@ -298,22 +317,125 @@ public sealed class CSharpEmitter
             _ => throw new NotSupportedException($"Unsupported literal: {literal.GetType().Name}"),
         };
 
-    private static string RenderDefaultValue(TypeReference type, LiteralValue? literal) =>
-        literal is not null ? RenderLiteral(literal) : DefaultLiteral(type);
+    private string RenderDefaultValue(TypeReference type, LiteralValue? literal, Declaration scope) =>
+        literal is not null ? RenderLiteral(literal) : DefaultLiteral(type, scope);
 
-    private static string DefaultLiteral(TypeReference type) =>
+    private string DefaultLiteral(TypeReference type, Declaration scope) =>
         type switch
         {
             PrimitiveTypeReference primitive when primitive.Name == "string" => "\"\"",
             PrimitiveTypeReference primitive when primitive.Name == "bool" => "false",
             PrimitiveTypeReference => "0",
-            ListTypeReference list => $"new List<{RenderType(list.ElementType)}>()",
-            SetTypeReference set => $"new HashSet<{RenderType(set.ElementType)}>()",
-            MapTypeReference map => $"new Dictionary<{RenderType(map.KeyType)}, {RenderType(map.ValueType)}>()",
-            ArrayTypeReference array when array.Length is int length => $"new {RenderType(array.ElementType)}[{length}]",
-            ArrayTypeReference array => $"Array.Empty<{RenderType(array.ElementType)}>()",
+            ListTypeReference list => $"new List<{RenderType(list.ElementType, scope, preferInterfaceContracts: true)}>()",
+            SetTypeReference set => $"new HashSet<{RenderType(set.ElementType, scope, preferInterfaceContracts: true)}>()",
+            MapTypeReference map => $"new Dictionary<{RenderType(map.KeyType, scope, preferInterfaceContracts: true)}, {RenderType(map.ValueType, scope, preferInterfaceContracts: true)}>()",
+            ArrayTypeReference array when array.Length is int length => $"new {RenderType(array.ElementType, scope, preferInterfaceContracts: true)}[{length}]",
+            ArrayTypeReference array => $"Array.Empty<{RenderType(array.ElementType, scope, preferInterfaceContracts: true)}>()",
             _ => "default!",
         };
+
+    private string RenderNamedType(NamedTypeReference named, Declaration scope, bool preferInterfaceContracts)
+    {
+        var resolved = ResolveNamedDeclaration(named, scope);
+        return resolved switch
+        {
+            InterfaceDeclaration interfaceDeclaration when preferInterfaceContracts => $"I{interfaceDeclaration.Name}",
+            Declaration declaration => declaration.Name,
+            _ => string.Join(".", named.Segments),
+        };
+    }
+
+    private Declaration? ResolveNamedDeclaration(NamedTypeReference named, Declaration scope)
+    {
+        if (named.IsGlobal)
+        {
+            return ResolveExact(named.Segments);
+        }
+
+        var scopeSegments = scope.NamespacePath.Concat(scope.ContainingTypes).Concat([scope.Name]).ToArray();
+        for (var index = scopeSegments.Length; index >= 0; index--)
+        {
+            var candidate = scopeSegments.Take(index).Concat(named.Segments).ToArray();
+            var resolved = ResolveExact(candidate);
+            if (resolved is not null)
+            {
+                return resolved;
+            }
+        }
+
+        if (scope is InterfaceDeclaration interfaceDeclaration)
+        {
+            foreach (var baseContract in interfaceDeclaration.BaseContracts.OfType<NamedTypeReference>())
+            {
+                if (ResolveNamedDeclaration(baseContract, interfaceDeclaration) is InterfaceDeclaration baseInterface)
+                {
+                    var resolved = ResolveNamedDeclaration(named, baseInterface);
+                    if (resolved is not null)
+                    {
+                        return resolved;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private Declaration? ResolveExact(IReadOnlyList<string> segments)
+    {
+        var key = string.Join(".", segments);
+        return _declarationsByQualifiedName.GetValueOrDefault(key);
+    }
+
+    private IReadOnlyList<InterfaceMember> GetEffectiveMembers(InterfaceDeclaration declaration)
+    {
+        var effective = new Dictionary<string, InterfaceMember>(StringComparer.Ordinal);
+
+        foreach (var baseContract in declaration.BaseContracts.OfType<NamedTypeReference>())
+        {
+            if (ResolveNamedDeclaration(baseContract, declaration) is InterfaceDeclaration baseInterface)
+            {
+                foreach (var member in GetEffectiveMembers(baseInterface))
+                {
+                    effective[member.Name] = member;
+                }
+            }
+        }
+
+        foreach (var member in declaration.Members)
+        {
+            effective[member.Name] = member;
+        }
+
+        return effective.Values.ToArray();
+    }
+
+    private static IEnumerable<Declaration> EnumerateDeclarations(IEnumerable<Declaration> declarations)
+    {
+        foreach (var declaration in declarations)
+        {
+            yield return declaration;
+
+            switch (declaration)
+            {
+                case NamespaceDeclaration namespaceDeclaration:
+                    foreach (var nested in EnumerateDeclarations(namespaceDeclaration.Members))
+                    {
+                        yield return nested;
+                    }
+
+                    break;
+
+                case InterfaceDeclaration interfaceDeclaration:
+                    foreach (var nested in EnumerateDeclarations(interfaceDeclaration.NestedDeclarations))
+                    {
+                        yield return nested;
+                    }
+
+                    break;
+            }
+        }
+    }
 
     private static void AppendDocs(StringBuilder builder, DocumentationComment? documentation, int indentLevel)
     {

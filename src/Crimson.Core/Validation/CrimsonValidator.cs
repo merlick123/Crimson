@@ -42,6 +42,11 @@ public sealed class CrimsonValidator
 
         foreach (var entry in _allDeclarationsByName)
         {
+            if (entry.Value.All(static declaration => declaration is NamespaceDeclaration))
+            {
+                continue;
+            }
+
             if (entry.Value.Count > 1)
             {
                 foreach (var declaration in entry.Value)

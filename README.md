@@ -166,7 +166,7 @@ It demonstrates:
 - generated C# interfaces and class plumbing
 - user-owned code under `src/User`
 - automatic Crimson-triggered regeneration from a consuming C# project
-- swapping multiple implementations behind `IHomeController`
+- capability-based swappability across vendor devices through `IDevice` and related interfaces
 - querying device features and tracing automation chains across the home
 
 ## Contributing
