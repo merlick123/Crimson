@@ -121,9 +121,16 @@ public sealed class CSharpEmitter
 
         if (!string.IsNullOrEmpty(namespaceName))
         {
+            builder.AppendLine("using System;");
             builder.AppendLine("using System.Collections.Generic;");
             builder.AppendLine();
             builder.AppendLine($"namespace {namespaceName};");
+            builder.AppendLine();
+        }
+        else
+        {
+            builder.AppendLine("using System;");
+            builder.AppendLine("using System.Collections.Generic;");
             builder.AppendLine();
         }
 
@@ -146,18 +153,24 @@ public sealed class CSharpEmitter
             AppendDocs(builder, valueMember.Documentation, 1);
             builder.AppendLine($"    {visibility} {RenderType(valueMember.Type)} {ToPascalCase(valueMember.Name)}");
             builder.AppendLine("    {");
-            builder.AppendLine($"        get => On{ToPascalCase(valueMember.Name)}Getting({fieldName});");
+            builder.AppendLine("        get");
+            builder.AppendLine("        {");
+            builder.AppendLine($"            var currentValue = {fieldName};");
+            builder.AppendLine($"            On{ToPascalCase(valueMember.Name)}Getting(ref currentValue);");
+            builder.AppendLine("            return currentValue;");
+            builder.AppendLine("        }");
             builder.AppendLine($"        {setterVisibility}");
             builder.AppendLine("        {");
-            builder.AppendLine($"            var newValue = On{ToPascalCase(valueMember.Name)}Setting(value);");
+            builder.AppendLine("            var newValue = value;");
+            builder.AppendLine($"            On{ToPascalCase(valueMember.Name)}Setting(ref newValue);");
             builder.AppendLine($"            {fieldName} = newValue;");
             builder.AppendLine($"            On{ToPascalCase(valueMember.Name)}Set(newValue);");
             builder.AppendLine("        }");
             builder.AppendLine("    }");
             builder.AppendLine();
-            builder.AppendLine($"    protected virtual {RenderType(valueMember.Type)} On{ToPascalCase(valueMember.Name)}Getting({RenderType(valueMember.Type)} value) => value;");
-            builder.AppendLine($"    protected virtual {RenderType(valueMember.Type)} On{ToPascalCase(valueMember.Name)}Setting({RenderType(valueMember.Type)} value) => value;");
-            builder.AppendLine($"    protected virtual void On{ToPascalCase(valueMember.Name)}Set({RenderType(valueMember.Type)} value) {{ }}");
+            builder.AppendLine($"    partial void On{ToPascalCase(valueMember.Name)}Getting(ref {RenderType(valueMember.Type)} value);");
+            builder.AppendLine($"    partial void On{ToPascalCase(valueMember.Name)}Setting(ref {RenderType(valueMember.Type)} value);");
+            builder.AppendLine($"    partial void On{ToPascalCase(valueMember.Name)}Set({RenderType(valueMember.Type)} value);");
             builder.AppendLine();
         }
 

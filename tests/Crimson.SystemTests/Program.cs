@@ -5,6 +5,7 @@ var failures = new List<string>();
 
 Run("Init build pipeline creates project output", BuildPipelineCreatesOutput);
 Run("Build heals missing user files", BuildHealsMissingUserFiles);
+Run("Init writes reusable MSBuild integration", InitWritesMsBuildIntegration);
 return failures.Count == 0 ? 0 : 1;
 
 void Run(string name, Action body)
@@ -115,5 +116,28 @@ namespace Billing.Contracts {
     if (!File.Exists(userFile))
     {
         throw new InvalidOperationException("Missing user file was not restored on rebuild.");
+    }
+}
+
+void InitWritesMsBuildIntegration()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "Billing.crimsonproj");
+    workspace.InitProject(projectFile, starter: false);
+
+    var props = Path.Combine(root, ".crimson", "msbuild", "Crimson.CSharp.props");
+    var targets = Path.Combine(root, ".crimson", "msbuild", "Crimson.CSharp.targets");
+
+    if (!File.Exists(props))
+    {
+        throw new InvalidOperationException("MSBuild props file was not created.");
+    }
+
+    if (!File.Exists(targets))
+    {
+        throw new InvalidOperationException("MSBuild targets file was not created.");
     }
 }

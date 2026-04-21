@@ -7,6 +7,7 @@ var tests = new (string Name, Action Body)[]
 {
     ("Parse interface with docs and members", ParseInterfaceWithDocs),
     ("Emit CSharp files for interface", EmitCSharpFiles),
+    ("Validate project catches unresolved types", ValidateProjectCatchesUnresolvedTypes),
 };
 
 var failures = new List<string>();
@@ -96,8 +97,39 @@ static void EmitCSharpFiles()
 
     var result = emitter.Emit(compilation);
     Assert.True(result.GeneratedFiles.Any(x => x.RelativePath.EndsWith("ICustomerService.g.cs", StringComparison.Ordinal)));
-    Assert.True(result.GeneratedFiles.Any(x => x.RelativePath.EndsWith("CustomerService.g.cs", StringComparison.Ordinal)));
+    var generatedClass = result.GeneratedFiles.Single(x => string.Equals(Path.GetFileName(x.RelativePath), "CustomerService.g.cs", StringComparison.Ordinal));
     Assert.True(result.UserFiles.Any(x => x.RelativePath.EndsWith("CustomerService.cs", StringComparison.Ordinal)));
+    Assert.Contains("partial void OnNameGetting(ref string value);", generatedClass.Content);
+    Assert.Contains("partial void OnNameSetting(ref string value);", generatedClass.Content);
+    Assert.Contains("var currentValue = _name;", generatedClass.Content);
+    Assert.DoesNotContain("protected virtual string OnNameGetting", generatedClass.Content);
+}
+
+static void ValidateProjectCatchesUnresolvedTypes()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-unit-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "Broken.crimsonproj");
+    workspace.InitProject(projectFile, starter: false);
+    File.WriteAllText(Path.Combine(root, "contracts", "broken.idl"), """
+namespace Demo.Contracts {
+    interface BrokenService {
+        MissingType value;
+    }
+}
+""");
+
+    try
+    {
+        workspace.ValidateProject(projectFile);
+        throw new InvalidOperationException("Expected validation to fail.");
+    }
+    catch (DiagnosticException exception)
+    {
+        Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON108"), "Expected unresolved type diagnostic.");
+    }
 }
 
 static string CreateTempIdl(string content)
@@ -130,6 +162,14 @@ static class Assert
         if (!actual.Contains(expectedSubstring, StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"Expected to find '{expectedSubstring}' in output.");
+        }
+    }
+
+    public static void DoesNotContain(string expectedSubstring, string actual)
+    {
+        if (actual.Contains(expectedSubstring, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Did not expect to find '{expectedSubstring}' in output.");
         }
     }
 

@@ -41,6 +41,13 @@ try
             return 0;
         }
 
+        case "validate":
+        {
+            workspace.ValidateProject(RequireArgument(args, 1, "Expected a .crimsonproj path."));
+            Console.WriteLine("Validation succeeded");
+            return 0;
+        }
+
         case "merge":
         {
             var result = workspace.Merge(RequireArgument(args, 1, "Expected a .crimsonproj path."));
@@ -68,7 +75,7 @@ catch (DiagnosticException exception)
 {
     foreach (var diagnostic in exception.Diagnostics)
     {
-        Console.Error.WriteLine($"{diagnostic.Severity} {diagnostic.Code}: {diagnostic.Message}");
+        Console.Error.WriteLine(FormatDiagnostic(diagnostic));
     }
 
     return 1;
@@ -102,10 +109,21 @@ static int HandleMergeResult(MergeResult result)
 static string RequireArgument(string[] arguments, int index, string message) =>
     arguments.Length > index ? arguments[index] : throw new InvalidOperationException(message);
 
+static string FormatDiagnostic(Diagnostic diagnostic)
+{
+    if (diagnostic.Source is null)
+    {
+        return $"{diagnostic.Severity} {diagnostic.Code}: {diagnostic.Message}";
+    }
+
+    return $"{diagnostic.Severity} {diagnostic.Code} {diagnostic.Source.FilePath}:{diagnostic.Source.Start.Line}:{diagnostic.Source.Start.Column}: {diagnostic.Message}";
+}
+
 static void PrintUsage()
 {
     Console.WriteLine("crimson parse <file.idl>");
     Console.WriteLine("crimson init <project.crimsonproj> [--starter]");
+    Console.WriteLine("crimson validate <project.crimsonproj>");
     Console.WriteLine("crimson generate <project.crimsonproj>");
     Console.WriteLine("crimson merge <project.crimsonproj>");
     Console.WriteLine("crimson build <project.crimsonproj>");

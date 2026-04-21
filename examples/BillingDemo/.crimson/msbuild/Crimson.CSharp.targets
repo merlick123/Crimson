@@ -1,0 +1,23 @@
+<Project>
+  <Target Name="RunCrimsonBuild"
+          BeforeTargets="CoreCompile"
+          Condition="'$(CrimsonProjectFile)' != ''">
+    <Exec Command="&quot;$(CrimsonCommand)&quot; build &quot;$(CrimsonProjectFile)&quot;"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <Target Name="IncludeCrimsonGeneratedSources"
+          BeforeTargets="CoreCompile"
+          DependsOnTargets="RunCrimsonBuild"
+          Condition="'$(CrimsonProjectFile)' != '' and '$(CrimsonSourcesIncluded)' != 'true'">
+    <ItemGroup>
+      <Compile Remove="$(CrimsonSourceRoot)/Generated/**/*.cs" />
+      <Compile Remove="$(CrimsonSourceRoot)/User/**/*.cs" />
+      <Compile Include="$(CrimsonSourceRoot)/Generated/**/*.cs" Link="Generated/%(RecursiveDir)%(Filename)%(Extension)" />
+      <Compile Include="$(CrimsonSourceRoot)/User/**/*.cs" Link="User/%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+    <PropertyGroup>
+      <CrimsonSourcesIncluded>true</CrimsonSourcesIncluded>
+    </PropertyGroup>
+  </Target>
+</Project>

@@ -20,6 +20,7 @@ For source-level iteration during development:
 
 ```bash
 dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- parse examples/BillingDemo/contracts/customer.idl
+dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- validate examples/BillingDemo/Billing.crimsonproj
 dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- build examples/BillingDemo/Billing.crimsonproj
 ```
 
@@ -47,6 +48,7 @@ Run tests:
 ```bash
 dotnet run --project tests/Crimson.Tests/Crimson.Tests.csproj
 dotnet run --project tests/Crimson.SystemTests/Crimson.SystemTests.csproj
+dotnet run --project examples/BillingDemo/app/BillingDemo.App.csproj
 ```
 
 ## Parser Regeneration

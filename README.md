@@ -6,10 +6,12 @@ Current scope in this repository:
 
 - a neutral `.idl` language with familiar declaration syntax
 - an ANTLR-based parser that lowers `.idl` into a typed semantic model
+- semantic validation and diagnostics
 - JSON AST export
 - an initial C# generator
 - staged generation and conservative 3-way merge scaffolding
-- CLI commands for `init`, `parse`, `generate`, `merge`, and `build`
+- reusable MSBuild integration for C# consumers
+- CLI commands for `init`, `parse`, `validate`, `generate`, `merge`, and `build`
 
 ## Status
 
@@ -17,10 +19,10 @@ This is an early implementation.
 
 The current vertical slice is working, but the full design space discussed for Crimson is not complete yet. In particular:
 
-- validation is still shallow
 - merge resolution is conservative and file-level
 - interactive external merge-tool support is not implemented yet
 - only the C# target is currently implemented
+- higher-level generation planning such as flavors and deployment-driven output selection is not implemented yet
 
 ## Repository Layout
 
@@ -53,6 +55,12 @@ Build the included example project:
 crimson build examples/BillingDemo/Billing.crimsonproj
 ```
 
+Validate a project:
+
+```bash
+crimson validate examples/BillingDemo/Billing.crimsonproj
+```
+
 Parse an IDL file to JSON:
 
 ```bash
@@ -69,13 +77,7 @@ dotnet publish src/Crimson.Cli/Crimson.Cli.csproj -c Release -o .artifacts/crims
 
 That produces a local build of the `crimson` CLI under `.artifacts/crimson/`.
 
-Depending on your platform, the published executable will be named either:
-
-- `crimson`
-- `Crimson.Cli`
-- `Crimson.Cli.exe`
-
-If you want a stable command name, create a symlink or shell alias named `crimson` that points at the published executable.
+On Unix-like systems, the published executable is `crimson`. On Windows, it is `crimson.exe`.
 
 If you want a single self-contained executable for a specific platform:
 
@@ -158,6 +160,13 @@ curl -L -o tools/antlr-4.13.1-complete.jar https://www.antlr.org/download/antlr-
 ## Example
 
 An example project is included in `examples/BillingDemo`.
+
+It demonstrates:
+
+- generated C# interfaces and class plumbing
+- user-owned code under `src/User`
+- automatic Crimson-triggered regeneration from a consuming C# project
+- swapping two implementations behind `ICustomerService`
 
 ## Contributing
 

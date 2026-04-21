@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../.crimson/msbuild/Crimson.CSharp.props" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -6,11 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
+    <CrimsonProjectFile>../Billing.crimsonproj</CrimsonProjectFile>
+    <CrimsonSourceRoot>../src</CrimsonSourceRoot>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Include="../src/Generated/**/*.cs" Link="Generated/%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="../src/User/**/*.cs" Link="User/%(RecursiveDir)%(Filename)%(Extension)" />
-  </ItemGroup>
-
+  <Import Project="../.crimson/msbuild/Crimson.CSharp.targets" />
 </Project>

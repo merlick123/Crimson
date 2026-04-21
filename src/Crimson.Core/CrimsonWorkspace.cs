@@ -4,6 +4,7 @@ using Crimson.Core.Merge;
 using Crimson.Core.Model;
 using Crimson.Core.Parsing;
 using Crimson.Core.Projects;
+using Crimson.Core.Validation;
 
 namespace Crimson.Core;
 
@@ -12,12 +13,20 @@ public sealed class CrimsonWorkspace
     private readonly CrimsonCompiler _compiler = new();
     private readonly CSharpEmitter _csharpEmitter = new();
     private readonly TreeMergeEngine _mergeEngine = new();
+    private readonly CrimsonValidator _validator = new();
 
     public CompilationUnitModel ParseFile(string filePath) =>
         _compiler.ParseFile(filePath);
 
     public CompilationSetModel ParseFiles(IEnumerable<string> filePaths) =>
         _compiler.ParseFiles(filePaths);
+
+    public CompilationSetModel ValidateFiles(IEnumerable<string> filePaths)
+    {
+        var compilation = ParseFiles(filePaths);
+        _validator.Validate(compilation);
+        return compilation;
+    }
 
     public string EmitAstJson(CompilationUnitModel model) =>
         JsonSerializer.Serialize(model, JsonDefaults.Options);
@@ -46,6 +55,7 @@ public sealed class CrimsonWorkspace
         Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-previous", "Generated"));
         Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-current"));
         Directory.CreateDirectory(Path.Combine(directory, ".crimson", "merge-backup"));
+        CSharpBuildIntegration.Write(directory);
 
         if (starter)
         {
@@ -53,11 +63,18 @@ public sealed class CrimsonWorkspace
         }
     }
 
+    public void ValidateProject(string projectFilePath)
+    {
+        var project = CrimsonProjectFile.Load(projectFilePath);
+        ValidateFiles(project.ResolveSourceFiles());
+    }
+
     public void Generate(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
-        var model = ParseFiles(project.ResolveSourceFiles());
+        var model = ValidateFiles(project.ResolveSourceFiles());
         var target = _csharpEmitter.Emit(model);
+        CSharpBuildIntegration.Write(project.ProjectDirectory);
 
         var rawCurrentRoot = Path.Combine(project.CrimsonStateDirectory, "raw-current");
         var generatedRoot = Path.Combine(rawCurrentRoot, "Generated");
