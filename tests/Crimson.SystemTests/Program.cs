@@ -4,6 +4,7 @@ using Crimson.Core;
 var failures = new List<string>();
 
 Run("Init build pipeline creates project output", BuildPipelineCreatesOutput);
+Run("Build heals missing user files", BuildHealsMissingUserFiles);
 return failures.Count == 0 ? 0 : 1;
 
 void Run(string name, Action body)
@@ -63,5 +64,50 @@ namespace Billing.Contracts {
     if (!projectJson.TryGetProperty("sources", out _))
     {
         throw new InvalidOperationException("Project file was not initialized correctly.");
+    }
+}
+
+void BuildHealsMissingUserFiles()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "Billing.crimsonproj");
+    workspace.InitProject(projectFile, starter: false);
+
+    Directory.CreateDirectory(Path.Combine(root, "contracts"));
+    File.WriteAllText(Path.Combine(root, "contracts", "customer.idl"), """
+namespace Billing.Contracts {
+    interface CustomerService {
+        string name;
+        string get_customer(string customer_id);
+    }
+}
+""");
+
+    var first = workspace.Build(projectFile);
+    if (first.Conflicts.Count != 0)
+    {
+        throw new InvalidOperationException("Initial build reported merge conflicts unexpectedly.");
+    }
+
+    var userFile = Path.Combine(root, "out", "csharp", "project", "User", "Billing", "Contracts", "CustomerService.cs");
+    if (!File.Exists(userFile))
+    {
+        throw new InvalidOperationException("User file was not created on initial build.");
+    }
+
+    File.Delete(userFile);
+
+    var second = workspace.Build(projectFile);
+    if (second.Conflicts.Count != 0)
+    {
+        throw new InvalidOperationException("Healing build reported merge conflicts unexpectedly.");
+    }
+
+    if (!File.Exists(userFile))
+    {
+        throw new InvalidOperationException("Missing user file was not restored on rebuild.");
     }
 }

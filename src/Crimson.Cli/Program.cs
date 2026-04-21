@@ -50,7 +50,13 @@ try
         case "build":
         {
             var result = workspace.Build(RequireArgument(args, 1, "Expected a .crimsonproj path."));
-            return HandleMergeResult(result);
+            var exitCode = HandleMergeResult(result);
+            if (exitCode == 0)
+            {
+                Console.WriteLine("Build succeeded");
+            }
+
+            return exitCode;
         }
 
         default:

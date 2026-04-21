@@ -99,6 +99,15 @@ public sealed class TreeMergeEngine
 
     private static MergeFileResult MergeFile(string? baseText, string? localText, string? remoteText)
     {
+        // If the live project file is missing but both generated baselines agree that
+        // the file should exist, heal the project tree back to the expected content.
+        if (localText is null &&
+            baseText is not null &&
+            string.Equals(baseText, remoteText, StringComparison.Ordinal))
+        {
+            return MergeFileResult.Success(remoteText);
+        }
+
         if (string.Equals(localText, remoteText, StringComparison.Ordinal))
         {
             return MergeFileResult.Success(localText);
