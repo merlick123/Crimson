@@ -46,7 +46,13 @@ tools/                   local tooling artifacts needed by the build
 After building or installing the `crimson` CLI, initialize a new project:
 
 ```bash
-crimson init Demo --starter
+crimson init Demo --profile csharp --starter
+```
+
+List available init profiles:
+
+```bash
+crimson init-profiles
 ```
 
 Build the included example project:
@@ -97,6 +103,19 @@ Helper scripts are included:
 ```bash
 ./scripts/publish.sh
 ./scripts/publish-self-contained.sh linux-x64
+```
+
+For fast local iteration, `./scripts/publish.sh` also refreshes a stable dev link at `.artifacts/bin/crimson`.
+To use that build in the current shell without changing your login profile:
+
+```bash
+export PATH="$PWD/.artifacts/bin:$PATH"
+```
+
+Or print the export command directly:
+
+```bash
+eval "$(./scripts/use-local-build.sh)"
 ```
 
 Common runtime identifiers:

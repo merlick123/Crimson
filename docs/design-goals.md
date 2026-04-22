@@ -18,7 +18,7 @@ Crimson is intended to grow from an initial IDL-to-C# vertical slice into a targ
 - semantic model construction
 - generic semantic validation
 - project loading and source discovery
-- target orchestration through neutral abstractions
+- orchestration through neutral abstractions for targets, host integrations, and init profiles
 - merge orchestration and generic merge infrastructure
 
 ### Targets own
@@ -27,7 +27,18 @@ Crimson is intended to grow from an initial IDL-to-C# vertical slice into a targ
 - target-specific validation and capability checks
 - emitted file layout
 - code generation rules
-- target integration artifacts such as build hooks or props/targets files
+
+### Host integrations own
+
+- build-system or toolchain integration assets such as props/targets files or CMake modules
+- host-specific validation that depends on the configured target set
+- project preparation for tool-owned assets under `.crimson/`
+
+### Init profiles own
+
+- project scaffolding choices
+- starter-file creation
+- default target and host configuration for a conceptual setup
 
 ## Target Extensibility
 

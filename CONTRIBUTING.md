@@ -37,6 +37,12 @@ Publish a runnable local CLI build:
 ./scripts/publish.sh
 ```
 
+For quick rebuild-and-run cycles, add the stable dev link directory to `PATH` for the current shell:
+
+```bash
+eval "$(./scripts/use-local-build.sh)"
+```
+
 Or publish a self-contained single-file build for a target runtime:
 
 ```bash
