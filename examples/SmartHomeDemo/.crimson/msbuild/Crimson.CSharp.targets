@@ -2,7 +2,7 @@
   <Target Name="RunCrimsonBuild"
           BeforeTargets="CoreCompile"
           Condition="'$(CrimsonProjectFile)' != ''">
-    <Exec Command="&quot;$(CrimsonCommand)&quot; build &quot;$(CrimsonProjectFile)&quot;"
+    <Exec Command="&quot;$(CrimsonCommand)&quot; $(CrimsonCommandArguments) build &quot;$(CrimsonProjectFile)&quot;"
           WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
 

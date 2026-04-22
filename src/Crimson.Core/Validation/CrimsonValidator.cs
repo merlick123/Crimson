@@ -101,6 +101,7 @@ public sealed class CrimsonValidator
             case ConstantDeclaration constantDeclaration:
                 ValidateNonVoidType(constantDeclaration.Type, constantDeclaration.Source, $"Constant '{constantDeclaration.QualifiedName}'");
                 ValidateTypeReference(constantDeclaration.Type, declaration.NamespacePath.Concat(declaration.ContainingTypes).ToArray(), declaration.Source);
+                ValidateRequiredConstantValue(constantDeclaration.Value, constantDeclaration.Source, $"Constant '{constantDeclaration.QualifiedName}'");
                 ValidateLiteralCompatibility(constantDeclaration.Type, constantDeclaration.Value, constantDeclaration.Source);
                 break;
         }
@@ -188,6 +189,7 @@ public sealed class CrimsonValidator
                 case ConstantMemberDeclaration constantMember:
                     ValidateNonVoidType(constantMember.Type, constantMember.Source, $"Constant member '{declaration.QualifiedName}.{constantMember.Name}'");
                     ValidateTypeReference(constantMember.Type, scope, constantMember.Source, declaration);
+                    ValidateRequiredConstantValue(constantMember.Value, constantMember.Source, $"Constant member '{declaration.QualifiedName}.{constantMember.Name}'");
                     ValidateLiteralCompatibility(constantMember.Type, constantMember.Value, constantMember.Source);
                     break;
             }
@@ -361,6 +363,16 @@ public sealed class CrimsonValidator
         {
             _diagnostics.Add(new Diagnostic("CRIMSON110", $"Literal is not compatible with declared type '{DescribeType(declaredType)}'.", "error", source ?? literal.Source));
         }
+    }
+
+    private void ValidateRequiredConstantValue(LiteralValue? literal, SourceSpan? source, string context)
+    {
+        if (literal is not null)
+        {
+            return;
+        }
+
+        _diagnostics.Add(new Diagnostic("CRIMSON114", $"{context} must declare a value.", "error", source));
     }
 
     private void ValidateInterfaceCycles()

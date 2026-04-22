@@ -8,7 +8,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <CrimsonProjectFile>../SmartHome.crimsonproj</CrimsonProjectFile>
-    <CrimsonSourceRoot>../src</CrimsonSourceRoot>
+    <CrimsonCommand>dotnet</CrimsonCommand>
+    <CrimsonCommandArguments>run --project &quot;$(MSBuildProjectDirectory)/../../../src/Crimson.Cli/Crimson.Cli.csproj&quot; --</CrimsonCommandArguments>
   </PropertyGroup>
 
   <Import Project="../.crimson/msbuild/Crimson.CSharp.targets" />

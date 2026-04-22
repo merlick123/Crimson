@@ -55,7 +55,7 @@ public sealed class CrimsonWorkspace
         Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-previous", "Generated"));
         Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-current"));
         Directory.CreateDirectory(Path.Combine(directory, ".crimson", "merge-backup"));
-        CSharpBuildIntegration.Write(directory);
+        CSharpBuildIntegration.Write(directory, CSharpTargetOptions.Default);
         EnsureGitIgnore(directory);
 
         if (starter)
@@ -75,7 +75,7 @@ public sealed class CrimsonWorkspace
         var project = CrimsonProjectFile.Load(projectFilePath);
         var model = ValidateFiles(project.ResolveSourceFiles());
         var target = _csharpEmitter.Emit(model);
-        CSharpBuildIntegration.Write(project.ProjectDirectory);
+        CSharpBuildIntegration.Write(project.ProjectDirectory, project.ResolveCSharpOptions());
 
         var rawCurrentRoot = Path.Combine(project.CrimsonStateDirectory, "raw-current");
         var generatedRoot = Path.Combine(rawCurrentRoot, "Generated");

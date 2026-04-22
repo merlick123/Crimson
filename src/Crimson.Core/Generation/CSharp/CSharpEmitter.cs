@@ -264,7 +264,7 @@ public sealed class CSharpEmitter
 
         builder.AppendLine($"public static class {declaration.Name}");
         builder.AppendLine("{");
-        builder.AppendLine($"    public const {RenderContractType(declaration.Type, declaration)} Value = {RenderLiteral(declaration.Value ?? new StringLiteralValue(string.Empty, null))};");
+        builder.AppendLine($"    public const {RenderContractType(declaration.Type, declaration)} Value = {RenderLiteral(declaration.Value ?? throw new InvalidOperationException($"Constant '{declaration.QualifiedName}' must declare a value."))};");
         builder.AppendLine("}");
         return builder.ToString().TrimEnd() + Environment.NewLine;
     }
@@ -273,6 +273,9 @@ public sealed class CSharpEmitter
         RenderType(type, scope, preferInterfaceContracts: true);
 
     private string RenderType(TypeReference type, Declaration scope, bool preferInterfaceContracts) =>
+        ApplyNullability(RenderTypeCore(type, scope, preferInterfaceContracts), type);
+
+    private string RenderTypeCore(TypeReference type, Declaration scope, bool preferInterfaceContracts) =>
         type switch
         {
             VoidTypeReference => "void",
@@ -300,6 +303,11 @@ public sealed class CSharpEmitter
             _ => throw new NotSupportedException($"Unsupported type: {type.GetType().Name}"),
         };
 
+    private static string ApplyNullability(string renderedType, TypeReference type) =>
+        type.IsNullable && type is not VoidTypeReference
+            ? $"{renderedType}?"
+            : renderedType;
+
     private string RenderParameters(IEnumerable<MethodParameter> parameters, Declaration scope) =>
         string.Join(", ", parameters.Select(parameter =>
         {
@@ -321,6 +329,7 @@ public sealed class CSharpEmitter
         literal is not null ? RenderLiteral(literal) : DefaultLiteral(type, scope);
 
     private string DefaultLiteral(TypeReference type, Declaration scope) =>
+        type.IsNullable ? "null" :
         type switch
         {
             PrimitiveTypeReference primitive when primitive.Name == "string" => "\"\"",

@@ -8,12 +8,14 @@ var tests = new (string Name, Action Body)[]
     ("Parse interface with docs and members", ParseInterfaceWithDocs),
     ("Emit CSharp files for interface", EmitCSharpFiles),
     ("Validate project catches unresolved types", ValidateProjectCatchesUnresolvedTypes),
+    ("Constants require explicit values", ConstantsRequireExplicitValues),
     ("Split namespaces across files validate and generate", SplitNamespacesAcrossFilesValidateAndGenerate),
     ("Interface composition cycle fails with CRIMSON111", InterfaceCompositionCycleFails),
     ("Multi-level composition emits inherited members", MultiLevelCompositionEmitsInheritedMembers),
     ("Multi-path composition deduplicates same origin members", MultiPathCompositionDeduplicatesSameOriginMembers),
     ("Inherited member collision from different origins errors", InheritedMemberCollisionErrors),
     ("Interface typed parameters returns and containers lower to IName", InterfaceTypedParametersReturnsAndContainersLowerToIName),
+    ("Nullable types emit nullable CSharp", NullableTypesEmitNullableCSharp),
     ("Abstract interfaces emit only interface projections", AbstractInterfacesEmitOnlyInterfaceProjection),
     ("Nested type resolution through a base contract works", NestedTypeResolutionThroughBaseContractWorks),
     ("Global dot name resolution works", GlobalDotNameResolutionWorks),
@@ -141,6 +143,23 @@ namespace Demo.Contracts {
     {
         Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON108"), "Expected unresolved type diagnostic.");
     }
+}
+
+static void ConstantsRequireExplicitValues()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/constants.idl", """
+namespace Demo {
+    const int32 Answer;
+
+    interface Config {
+        const string Name;
+    }
+}
+""");
+
+    var exception = Assert.Throws<DiagnosticException>(() => project.Workspace.ValidateProject(project.ProjectFile));
+    Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON114"), "Expected missing constant value diagnostic.");
 }
 
 static void SplitNamespacesAcrossFilesValidateAndGenerate()
@@ -291,6 +310,40 @@ namespace Demo {
 
     var generatedInterface = ReadGenerated(project.Root, "Generated", "Demo", "IRegistry.g.cs");
     Assert.Contains("IDevice GetDevice(IDevice device, List<IDevice> devices, HashSet<IDevice> deviceSet, Dictionary<string, IDevice> deviceMap);", generatedInterface);
+}
+
+static void NullableTypesEmitNullableCSharp()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/nulls.idl", """
+namespace Demo {
+    abstract interface Device {
+        string? nickname;
+    }
+
+    enum Mode {
+        On,
+        Off,
+    }
+
+    interface Registry {
+        string? display_name;
+        list<string?>? aliases;
+        Device? primary_device;
+        map<string, Device?>? device_map;
+        Mode? active_mode;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGenerated(project.Root, "Generated", "Demo", "IRegistry.g.cs");
+    Assert.Contains("string? DisplayName { get; set; }", generatedInterface);
+    Assert.Contains("List<string?>? Aliases { get; set; }", generatedInterface);
+    Assert.Contains("IDevice? PrimaryDevice { get; set; }", generatedInterface);
+    Assert.Contains("Dictionary<string, IDevice?>? DeviceMap { get; set; }", generatedInterface);
+    Assert.Contains("Mode? ActiveMode { get; set; }", generatedInterface);
 }
 
 static void AbstractInterfacesEmitOnlyInterfaceProjection()

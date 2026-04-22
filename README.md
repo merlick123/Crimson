@@ -64,7 +64,7 @@ crimson validate examples/SmartHomeDemo/SmartHome.crimsonproj
 Parse an IDL file to JSON:
 
 ```bash
-crimson parse examples/SmartHomeDemo/contracts/home.idl
+crimson parse examples/SmartHomeDemo/contracts/core/smart_home.idl
 ```
 
 ## Build From Source
