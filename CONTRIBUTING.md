@@ -54,6 +54,11 @@ Run tests:
 ```bash
 dotnet run --project tests/Crimson.Tests/Crimson.Tests.csproj
 dotnet run --project tests/Crimson.SystemTests/Crimson.SystemTests.csproj
+```
+
+If the change affects the example app or project integration, also run:
+
+```bash
 dotnet run --project examples/SmartHomeDemo/app/SmartHomeDemo.App.csproj
 ```
 

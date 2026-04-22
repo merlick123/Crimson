@@ -2,14 +2,22 @@
 
 CppDeviceDemo is a small standalone C++ starter example.
 
-For the canonical rich cross-target demo, use `examples/SmartHomeDemo`.
+For the main multi-frontend demo, use `examples/SmartHomeDemo`.
 
 It demonstrates:
 
 - a host-runnable C++/CMake workflow
 - generated and user-owned C++ code under `cpp/generated` and `cpp/user`
 - reusable CMake integration through `.crimson/cmake/Crimson.Cpp.cmake`
-- a checked-in generated projection alongside user-owned implementation stubs
+- a small contract and implementation pair without the wider multi-frontend SmartHome scenario
+
+Project layout:
+
+- `contracts/`: Crimson IDL contracts
+- `cpp/generated/`: Crimson-generated C++ headers and sources
+- `cpp/user/`: merge-protected user implementation files
+- `app/`: consuming C++ entry point
+- `.crimson/cmake/Crimson.Cpp.cmake`: tool-owned CMake integration helper
 
 Run it from the example directory:
 

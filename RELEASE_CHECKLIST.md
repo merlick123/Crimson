@@ -4,13 +4,12 @@ Use this checklist before cutting a tagged Crimson release.
 
 ## Product
 
-- The README matches the current CLI and example workflow.
+- The README matches the current CLI, init-profile, and example workflows.
 - `examples/SmartHomeDemo` still demonstrates the intended main example workflow across frontends:
-  - shared contracts lowered through the built-in frontends
+  - shared contracts reused across the built-in frontends
   - generated/user code split under `src`, `cpp`, and `rust/src`
-  - automatic host integration from .NET, CMake, and Cargo
-  - capability-based swappability through `IDevice` and `IDemoHomeRuntime`
-  - feature discovery and device-chain tracing
+  - automatic host integration through MSBuild, CMake, and Cargo
+  - a single runtime scenario that exercises registry, capability, automation, and scene contracts
 - The documented product scope is consistent across `README.md`, `docs/release-notes-draft.md`, and CLI help:
   - built-in target-language emitter wording stays generic unless the exact built-in set is the point
   - built-in host integrations are MSBuild, CMake, and Cargo

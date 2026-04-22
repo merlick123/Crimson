@@ -33,7 +33,7 @@ public sealed class CSharpProjectInitProfile : IProjectInitProfile
     private static string RenderReadme(string projectName) => $$"""
 # {{projectName}}
 
-This project uses the `csharp` Crimson init profile.
+This project uses Crimson with the `csharp` init profile.
 
 Run it from this directory:
 
@@ -41,7 +41,7 @@ Run it from this directory:
 dotnet run --project app/{{projectName}}.App.csproj
 ```
 
-The consuming app runs `crimson build` automatically before compile.
+The MSBuild integration runs `crimson build` automatically before compile.
 
 Override the Crimson command if you are using a local repo build:
 
@@ -78,12 +78,12 @@ Project layout:
 
     private const string StarterIdl = """
 namespace SmartHome {
-    /// Example smart-home device.
+    /// Simple dimmable light.
     interface LightDevice {
-        /// Human-friendly device name.
+        /// Display name shown to users.
         string display_name;
 
-        /// Current brightness level.
+        /// Current brightness percentage.
         int32 brightness_percent = 35;
     }
 }

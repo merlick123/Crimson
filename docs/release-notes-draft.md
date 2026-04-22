@@ -4,19 +4,13 @@ This draft tracks the current release story for the repository and should stay a
 
 ## Highlights
 
-- Added a built-in C++ target alongside the existing C# workflow.
-- Added a built-in Rust target with Cargo integration and Rust init profiles.
-- Added reusable CMake integration for C++ consumers.
-- Added built-in init profiles for `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, `cpp-cmake-cross`, `rust-cargo`, and `rust-cargo-no-std`.
-- Added semantic project validation with `crimson validate`.
-- Improved CLI diagnostics and build workflow polish.
-- Extracted reusable C# MSBuild integration for Crimson-generated projects.
-- Expanded SmartHomeDemo into the shared end-to-end example for all built-in frontends with:
-  - one rich contract set reused across .NET, CMake, and Cargo frontends
-  - generated/user-owned code split in each frontend
-  - capability-based swappability through `Device` and `DemoHomeRuntime`
-  - feature queries, automation-chain tracing, and scene application across every frontend
-- Tightened generated C# customization hooks for value members.
+- A neutral `.idl` language with ANTLR-based parsing, semantic validation, and JSON AST export.
+- Built-in code generation for C#, C++, and Rust with staged, merge-aware materialization.
+- Reusable host integrations for MSBuild, CMake, and Cargo consumers.
+- Built-in init profiles for `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, `cpp-cmake-cross`, `rust-cargo`, and `rust-cargo-no-std`.
+- Project validation through `crimson validate`, plus improved CLI diagnostics and build workflow polish.
+- SmartHomeDemo as the shared end-to-end example across the built-in frontends, including shared contracts, generated/user code separation, and a common runtime scenario.
+- Generated C# customization hooks for value members.
 
 ## Current Scope
 

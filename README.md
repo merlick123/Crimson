@@ -223,11 +223,10 @@ The main example project is `examples/SmartHomeDemo`.
 
 `examples/SmartHomeDemo` demonstrates:
 
-- one shared contract tree lowered into multiple target-language frontends
-- generated and user-owned code under `src/`, `cpp/`, and `rust/src/`
-- automatic Crimson-triggered regeneration from consuming .NET, CMake, and Cargo frontends
-- capability-based swappability across vendor devices through `IDevice` and related interfaces
-- querying device features and tracing automation chains across the home
+- one shared contract tree reused across the .NET, C++, and Rust frontends
+- generated and user-owned code kept separate under `src/`, `cpp/`, and `rust/src/`
+- automatic Crimson-triggered regeneration from the MSBuild, CMake, and Cargo frontends
+- a single runtime scenario that exercises shared device, registry, automation, and scene contracts
 
 ## Contributing
 

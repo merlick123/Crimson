@@ -122,7 +122,7 @@ enum HttpStatus : int32 {
 }
 ```
 
-Current target limitation:
+Current built-in target limitation:
 
 - the C++ target still rejects enums with associated values
 
@@ -270,9 +270,9 @@ interface Controller {
 
 Annotations are preserved in the semantic model for generators and tooling.
 
-## C++ Target Notes
+## C++ Target Configuration
 
-The C++ target now emits through a generated support header:
+The C++ target emits a generated support header:
 
 - `Crimson/Cpp/Support.g.hpp`
 
@@ -300,9 +300,9 @@ Supported `interfaceHandleStyle` values:
 - `shared_ptr`
 - `raw_ptr`
 
-This is intended as a generic codegen policy knob rather than a platform-specific feature.
+This is a target policy knob rather than a platform-specific feature.
 
-## Rust Target Notes
+## Rust Target Configuration
 
 The Rust target emits generated and user-owned modules under the configured output root.
 

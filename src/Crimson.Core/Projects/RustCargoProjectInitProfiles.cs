@@ -86,8 +86,12 @@ Project layout:
 
     internal const string StarterIdl = """
 namespace SmartHome {
+    /// Simple dimmable light.
     interface LightDevice {
+        /// Display name shown to users.
         string display_name;
+
+        /// Current brightness percentage.
         int32 brightness_percent = 35;
     }
 }
@@ -183,13 +187,15 @@ path = "src/lib.rs"
     private static string RenderReadme(string projectName) => $$"""
 # {{projectName}}
 
-This project uses the `rust-cargo-no-std` Crimson init profile.
+This project uses Crimson with the `rust-cargo-no-std` init profile.
 
 Validate it from this directory:
 
 ```bash
 cargo check
 ```
+
+The Cargo build script runs `crimson build` automatically before Cargo checks the crate.
 
 The generated support layer is alloc-based and keeps the crate in `no_std`.
 
@@ -200,6 +206,14 @@ CRIMSON_COMMAND=dotnet \
 CRIMSON_COMMAND_ARGUMENTS="run --project /path/to/src/Crimson.Cli/Crimson.Cli.csproj --" \
 cargo check
 ```
+
+Project layout:
+
+- `contracts/`: Crimson IDL contracts
+- `src/generated/`: Crimson-generated Rust output
+- `src/user/`: merge-protected user implementation modules
+- `src/lib.rs`: package entry point
+- `.crimson/cargo/Crimson.Cargo.rs`: tool-owned Cargo build integration helper
 """;
 
     private const string BuildScript = """

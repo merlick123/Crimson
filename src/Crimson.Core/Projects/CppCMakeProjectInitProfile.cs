@@ -83,8 +83,12 @@ crimson_configure_cpp_target({{projectName}}App)
 
     internal const string StarterIdl = """
 namespace SmartHome {
+    /// Simple dimmable light.
     interface LightDevice {
+        /// Display name shown to users.
         string display_name;
+
+        /// Current brightness percentage.
         int32 brightness_percent = 35;
     }
 }

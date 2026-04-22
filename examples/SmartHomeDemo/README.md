@@ -1,15 +1,14 @@
 # SmartHomeDemo
 
-SmartHomeDemo is the canonical rich Crimson example.
+SmartHomeDemo is the main end-to-end Crimson example.
 
 It demonstrates:
 
-- capability-first IDL contracts such as `Device`, `Camera`, `Light`, and `Thermostat`
-- vendor-specific devices defined in their own `.idl` files such as `EufyDoorbell`, `RingDoorbell`, `HueBulb`, `NestThermostat`, and `SonosSpeaker`
-- a `DemoHomeRuntime` contract that registers devices, queries capability groups, and connects devices into automation chains
-- one shared `contracts/**/*.idl` tree lowered through multiple target-language frontends
+- shared device, registry, automation, and scene contracts
+- multiple concrete devices defined in focused `.idl` files
+- one shared `contracts/**/*.idl` tree reused by the .NET, C++, and Rust frontends
 - user-owned behavior under `src/User`, `cpp/user`, and `rust/src/user`
-- automatic `crimson build` integration from .NET, CMake, and Cargo frontends
+- automatic `crimson build` integration from the MSBuild, CMake, and Cargo frontends
 
 Project files in this example root:
 
@@ -39,14 +38,13 @@ Run the Rust frontend from the repo root:
 cargo run --manifest-path examples/SmartHomeDemo/Cargo.toml
 ```
 
-All three frontends exercise the same rich scenario. The demo will:
+All three frontends exercise the same shared scenario. The demo will:
 
 1. run `crimson build` automatically
 2. regenerate the generated projection for the selected frontend if the IDL changed
-3. query devices through the shared `DemoHomeRuntime`, `Device`, and capability contracts
-4. treat different vendor devices interchangeably when they support the same capabilities
-5. connect devices into an automation chain across the home
-6. apply a scene that flows through those connected devices
+3. query and compose devices through the shared runtime and capability contracts
+4. treat different implementations consistently when they satisfy the same interfaces
+5. apply automation and scene flows across the same contract model
 
 You can also run the Crimson steps directly:
 
