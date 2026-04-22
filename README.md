@@ -41,11 +41,31 @@ tools/                   local tooling artifacts needed by the build
 ## Requirements
 
 - .NET SDK 10.0 or later
-- Java 21 or later
+- Java 21 or later only if you are working on Crimson itself and need to regenerate the parser from `grammar/Crimson.g4`
+
+## Get The CLI
+
+If you are running Crimson from this repository, publish a local CLI build first:
+
+```bash
+dotnet publish src/Crimson.Cli/Crimson.Cli.csproj -c Release -o .artifacts/crimson
+export PATH="$PWD/.artifacts/crimson:$PATH"
+```
+
+For repeated local development, you can also use:
+
+```bash
+./scripts/publish.sh
+eval "$(./scripts/use-local-build.sh)"
+```
+
+That gives you a local `crimson` executable for the commands below.
+
+Java is not required for normal `dotnet build` or `dotnet publish` use with the checked-in generated parser sources. It is only needed for the parser-regeneration step documented later in this file.
 
 ## Quick Start
 
-After building or installing the `crimson` CLI, initialize a new project:
+Initialize a new project from a built-in profile:
 
 ```bash
 crimson init Demo --profile csharp --starter
@@ -58,6 +78,12 @@ crimson init-profiles
 ```
 
 The built-in profiles currently include `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, `cpp-cmake-cross`, `rust-cargo`, and `rust-cargo-no-std`.
+
+If you are evaluating the repository rather than creating a new project, the recommended first run is the .NET SmartHome frontend because it uses only the .NET toolchain already required by the repository:
+
+```bash
+dotnet run --project examples/SmartHomeDemo/app/SmartHomeDemo.App.csproj
+```
 
 Build the included example projects:
 
@@ -90,6 +116,24 @@ Parse an IDL file to JSON:
 ```bash
 crimson parse examples/SmartHomeDemo/contracts/core/smart_home.idl
 ```
+
+## Project Workflow
+
+Crimson separates validation, staged generation, and merge application:
+
+- `crimson validate <project.crimsonproj>` parses the project and checks semantics without writing output.
+- `crimson generate <project.crimsonproj>` writes fresh generated output into `.merge/current`.
+- `crimson merge <project.crimsonproj>` compares `.merge/current`, `.merge/previous`, and the live project tree, then applies safe updates or reports conflicts.
+- `crimson build <project.crimsonproj>` runs `generate` and `merge` in one step.
+
+Project-local tool state is split by concern:
+
+- `.merge/previous`: the previous generated baseline used for comparison
+- `.merge/current`: the latest staged generated output
+- `.merge/backup`: backups created while applying updates
+- `.crimson/`: tool-owned integration assets such as MSBuild, CMake, or Cargo helpers
+
+The intent is that generated updates remain conservative: when Crimson cannot safely reconcile generated and user changes, it reports a conflict instead of silently overwriting user code.
 
 Value-only types should be declared as `struct`:
 

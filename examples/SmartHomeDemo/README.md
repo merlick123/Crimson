@@ -2,6 +2,8 @@
 
 SmartHomeDemo is the main end-to-end Crimson example.
 
+If you are reading the repository for the first time, start with the .NET frontend. It exercises the full contract and regeneration flow while using only the .NET toolchain already required by the repository.
+
 It demonstrates:
 
 - shared device, registry, automation, and scene contracts
@@ -21,6 +23,8 @@ Run the .NET frontend from the repo root:
 ```bash
 dotnet run --project examples/SmartHomeDemo/app/SmartHomeDemo.App.csproj
 ```
+
+That is the recommended first run.
 
 Run the C++ frontend from the repo root:
 

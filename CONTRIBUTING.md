@@ -12,7 +12,7 @@
 Required tools:
 
 - .NET SDK 10.0 or later
-- Java 21 or later
+- Java 21 or later only if you need to regenerate the parser after editing `grammar/Crimson.g4`
 
 ## Running From Source
 

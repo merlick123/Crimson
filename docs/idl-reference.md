@@ -47,7 +47,7 @@ Concrete interfaces generate:
 
 - an interface projection
 - a generated implementation base
-- a user-owned partial/user class stub
+- a user-owned implementation stub following the selected target's conventions
 
 Abstract interfaces generate only the interface projection.
 
@@ -250,6 +250,57 @@ namespace SmartHome {
     }
 }
 ```
+
+## Project Files
+
+Crimson project files declare which contracts to load, which targets to emit, and optionally which host integration should own tool-managed assets.
+
+A minimal project file looks like this:
+
+```json
+{
+  "sources": [
+    "contracts/**/*.idl"
+  ],
+  "excludes": [],
+  "targets": {
+    "csharp": {
+      "output": "src"
+    }
+  }
+}
+```
+
+Top-level keys:
+
+- `sources`: include globs for `.idl` files, resolved relative to the project file
+- `excludes`: exclude globs applied after `sources`
+- `targets`: named target configurations such as `csharp`, `cpp`, or `rust`
+- `host`: optional host/build-system integration configuration
+
+Example host-enabled project:
+
+```json
+{
+  "sources": [
+    "contracts/**/*.idl"
+  ],
+  "excludes": [],
+  "targets": {
+    "cpp": {
+      "output": "cpp"
+    }
+  },
+  "host": {
+    "kind": "cmake",
+    "configuration": {
+      "buildDirectory": "build"
+    }
+  }
+}
+```
+
+`crimson init` writes a complete project file and matching scaffold for the selected profile. Hand-written project files follow the same structure.
 
 ## Annotations
 

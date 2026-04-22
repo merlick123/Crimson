@@ -10,7 +10,7 @@ This draft tracks the current release story for the repository and should stay a
 - Built-in init profiles for `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, `cpp-cmake-cross`, `rust-cargo`, and `rust-cargo-no-std`.
 - Project validation through `crimson validate`, plus improved CLI diagnostics and build workflow polish.
 - SmartHomeDemo as the shared end-to-end example across the built-in frontends, including shared contracts, generated/user code separation, and a common runtime scenario.
-- Generated C# customization hooks for value members.
+- Generated customization hooks in the built-in frontends, including C# value-member hooks.
 
 ## Current Scope
 
