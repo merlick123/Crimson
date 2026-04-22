@@ -5,8 +5,9 @@ This draft tracks the current release story for the repository and should stay a
 ## Highlights
 
 - Added a built-in C++ target alongside the existing C# workflow.
+- Added a built-in Rust target with Cargo integration and Rust init profiles.
 - Added reusable CMake integration for C++ consumers.
-- Added built-in init profiles for `csharp`, `cpp-cmake`, and `cpp-cmake-gcc`.
+- Added built-in init profiles for `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, `rust-cargo`, and `rust-cargo-no-std`.
 - Added semantic project validation with `crimson validate`.
 - Improved CLI diagnostics and build workflow polish.
 - Extracted reusable C# MSBuild integration for Crimson-generated projects.
@@ -26,11 +27,14 @@ Crimson currently includes these built-in workflows:
 - validation
 - C# generation
 - C++ generation
+- Rust generation
 - staged merge-aware materialization
 - MSBuild integration for C# consumers
 - CMake integration for C++ consumers
-- init profiles for `csharp`, `cpp-cmake`, and `cpp-cmake-gcc`
+- Cargo integration for Rust consumers
+- init profiles for `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, `rust-cargo`, and `rust-cargo-no-std`
 - example-driven C# consumer workflow through `examples/SmartHomeDemo`
+- example-driven Rust consumer workflow through `examples/RustDeviceDemo`
 
 ## Known Limits
 

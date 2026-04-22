@@ -183,6 +183,7 @@ static void PrintUsage()
     Console.WriteLine("  crimson init SmartHomeDemo --profile csharp --starter");
     Console.WriteLine("  crimson init SensorNode --profile cpp-cmake-gcc --starter");
     Console.WriteLine("  crimson init ControlNode --profile cpp-cmake-cross");
+    Console.WriteLine("  crimson init DeviceBridge --profile rust-cargo --starter");
     Console.WriteLine("  crimson init-profiles");
     Console.WriteLine("  crimson validate examples/SmartHomeDemo/SmartHome.crimsonproj");
     Console.WriteLine("  crimson build examples/SmartHomeDemo/SmartHome.crimsonproj");

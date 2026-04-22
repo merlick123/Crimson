@@ -9,15 +9,11 @@ public sealed record GeneratedTargetTree(
 
 public sealed class CSharpEmitter
 {
-    private Dictionary<string, Declaration> _declarationsByQualifiedName = new(StringComparer.Ordinal);
+    private GenerationModelNavigator _model = null!;
 
     public GeneratedTargetTree Emit(CompilationSetModel compilation)
     {
-        _declarationsByQualifiedName = compilation.Files
-            .SelectMany(static file => EnumerateDeclarations(file.Declarations))
-            .Where(static declaration => declaration is not NamespaceDeclaration)
-            .GroupBy(static declaration => declaration.QualifiedName, StringComparer.Ordinal)
-            .ToDictionary(static declarations => declarations.Key, static declarations => declarations.First(), StringComparer.Ordinal);
+        _model = new GenerationModelNavigator(compilation);
 
         var generatedFiles = new List<GeneratedFile>();
         var userFiles = new List<GeneratedFile>();
@@ -76,13 +72,8 @@ public sealed class CSharpEmitter
         }
     }
 
-    private static string GetDeclarationPath(Declaration declaration, string fileName)
-    {
-        var segments = declaration.NamespacePath.Concat(declaration.ContainingTypes).ToArray();
-        return segments.Length == 0
-            ? fileName
-            : Path.Combine(Path.Combine(segments), fileName);
-    }
+    private static string GetDeclarationPath(Declaration declaration, string fileName) =>
+        GenerationModelNavigator.GetDeclarationPath(declaration, fileName);
 
     private string RenderContractInterface(InterfaceDeclaration declaration)
     {
@@ -154,7 +145,7 @@ public sealed class CSharpEmitter
         builder.AppendLine($"public partial class {declaration.Name} : I{declaration.Name}");
         builder.AppendLine("{");
 
-        foreach (var valueMember in GetEffectiveMembers(declaration).OfType<ValueMemberDeclaration>())
+        foreach (var valueMember in _model.GetEffectiveMembers(declaration).OfType<ValueMemberDeclaration>())
         {
             var fieldName = $"_{ToCamelCase(valueMember.Name)}";
             builder.AppendLine($"    private {RenderContractType(valueMember.Type, declaration)} {fieldName} = {RenderDefaultValue(valueMember.Type, valueMember.DefaultValue, declaration)};");
@@ -217,7 +208,7 @@ public sealed class CSharpEmitter
         builder.AppendLine("    }");
         builder.AppendLine();
 
-        foreach (var method in GetEffectiveMembers(declaration).OfType<MethodMemberDeclaration>())
+        foreach (var method in _model.GetEffectiveMembers(declaration).OfType<MethodMemberDeclaration>())
         {
             AppendDocs(builder, method.Documentation, 1);
             builder.AppendLine($"    public virtual {RenderContractType(method.ReturnType, declaration)} {ToPascalCase(method.Name)}({RenderParameters(method.Parameters, declaration)})");
@@ -394,8 +385,8 @@ public sealed class CSharpEmitter
             PrimitiveTypeReference primitive when primitive.Name == "string" => "\"\"",
             PrimitiveTypeReference primitive when primitive.Name == "bool" => "false",
             PrimitiveTypeReference => "0",
-            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is EnumDeclaration => "default",
-            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is StructDeclaration structDeclaration => $"new {RenderResolvedTypeName(structDeclaration, scope, structDeclaration.Name)}()",
+            NamedTypeReference named when _model.ResolveNamedDeclaration(named, scope) is EnumDeclaration => "default",
+            NamedTypeReference named when _model.ResolveNamedDeclaration(named, scope) is StructDeclaration structDeclaration => $"new {RenderResolvedTypeName(structDeclaration, scope, structDeclaration.Name)}()",
             ListTypeReference list => $"new List<{RenderType(list.ElementType, scope, preferInterfaceContracts: true)}>()",
             SetTypeReference set => $"new HashSet<{RenderType(set.ElementType, scope, preferInterfaceContracts: true)}>()",
             MapTypeReference map => $"new Dictionary<{RenderType(map.KeyType, scope, preferInterfaceContracts: true)}, {RenderType(map.ValueType, scope, preferInterfaceContracts: true)}>()",
@@ -406,7 +397,7 @@ public sealed class CSharpEmitter
 
     private string RenderNamedType(NamedTypeReference named, Declaration scope, bool preferInterfaceContracts)
     {
-        var resolved = ResolveNamedDeclaration(named, scope);
+        var resolved = _model.ResolveNamedDeclaration(named, scope);
         return resolved switch
         {
             InterfaceDeclaration interfaceDeclaration when preferInterfaceContracts => RenderResolvedTypeName(interfaceDeclaration, scope, $"I{interfaceDeclaration.Name}"),
@@ -419,24 +410,13 @@ public sealed class CSharpEmitter
     private string RenderNamedValueExpression(NamedValueExpression namedValue, TypeReference declaredType, Declaration scope)
     {
         if (declaredType is NamedTypeReference namedType &&
-            ResolveNamedDeclaration(namedType, scope) is EnumDeclaration targetEnum)
+            _model.ResolveNamedDeclaration(namedType, scope) is EnumDeclaration targetEnum)
         {
-            var enumDeclaration = ResolveEnumReference(namedValue, targetEnum, scope) ?? targetEnum;
+            var enumDeclaration = _model.ResolveEnumReference(namedValue, targetEnum, scope) ?? targetEnum;
             return $"{RenderResolvedTypeName(enumDeclaration, scope, enumDeclaration.Name)}.{namedValue.Segments[^1]}";
         }
 
         return namedValue.DisplayName;
-    }
-
-    private EnumDeclaration? ResolveEnumReference(NamedValueExpression namedValue, EnumDeclaration fallback, Declaration scope)
-    {
-        if (namedValue.Segments.Count <= 1)
-        {
-            return fallback;
-        }
-
-        var qualifier = new NamedTypeReference(namedValue.Segments.Take(namedValue.Segments.Count - 1).ToArray(), namedValue.IsGlobal, false, namedValue.Source);
-        return ResolveNamedDeclaration(qualifier, scope) as EnumDeclaration;
     }
 
     private static string RenderResolvedTypeName(Declaration declaration, Declaration scope, string localName)
@@ -454,97 +434,6 @@ public sealed class CSharpEmitter
         return $"global::{string.Join(".", declaration.NamespacePath)}.{localName}";
     }
 
-    private Declaration? ResolveNamedDeclaration(NamedTypeReference named, Declaration scope)
-    {
-        if (named.IsGlobal)
-        {
-            return ResolveExact(named.Segments);
-        }
-
-        var scopeSegments = scope.NamespacePath.Concat(scope.ContainingTypes).Concat([scope.Name]).ToArray();
-        for (var index = scopeSegments.Length; index >= 0; index--)
-        {
-            var candidate = scopeSegments.Take(index).Concat(named.Segments).ToArray();
-            var resolved = ResolveExact(candidate);
-            if (resolved is not null)
-            {
-                return resolved;
-            }
-        }
-
-        if (scope is InterfaceDeclaration interfaceDeclaration)
-        {
-            foreach (var baseContract in interfaceDeclaration.BaseContracts.OfType<NamedTypeReference>())
-            {
-                if (ResolveNamedDeclaration(baseContract, interfaceDeclaration) is InterfaceDeclaration baseInterface)
-                {
-                    var resolved = ResolveNamedDeclaration(named, baseInterface);
-                    if (resolved is not null)
-                    {
-                        return resolved;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private Declaration? ResolveExact(IReadOnlyList<string> segments)
-    {
-        var key = string.Join(".", segments);
-        return _declarationsByQualifiedName.GetValueOrDefault(key);
-    }
-
-    private IReadOnlyList<InterfaceMember> GetEffectiveMembers(InterfaceDeclaration declaration)
-    {
-        var effective = new Dictionary<string, InterfaceMember>(StringComparer.Ordinal);
-
-        foreach (var baseContract in declaration.BaseContracts.OfType<NamedTypeReference>())
-        {
-            if (ResolveNamedDeclaration(baseContract, declaration) is InterfaceDeclaration baseInterface)
-            {
-                foreach (var member in GetEffectiveMembers(baseInterface))
-                {
-                    effective[member.Name] = member;
-                }
-            }
-        }
-
-        foreach (var member in declaration.Members)
-        {
-            effective[member.Name] = member;
-        }
-
-        return effective.Values.ToArray();
-    }
-
-    private static IEnumerable<Declaration> EnumerateDeclarations(IEnumerable<Declaration> declarations)
-    {
-        foreach (var declaration in declarations)
-        {
-            yield return declaration;
-
-            switch (declaration)
-            {
-                case NamespaceDeclaration namespaceDeclaration:
-                    foreach (var nested in EnumerateDeclarations(namespaceDeclaration.Members))
-                    {
-                        yield return nested;
-                    }
-
-                    break;
-
-                case InterfaceDeclaration interfaceDeclaration:
-                    foreach (var nested in EnumerateDeclarations(interfaceDeclaration.NestedDeclarations))
-                    {
-                        yield return nested;
-                    }
-
-                    break;
-            }
-        }
-    }
 
     private static void AppendDocs(StringBuilder builder, DocumentationComment? documentation, int indentLevel)
     {

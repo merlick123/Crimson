@@ -1,0 +1,19 @@
+{
+  "sources": [
+    "contracts/**/*.idl"
+  ],
+  "excludes": [],
+  "targets": {
+    "rust": {
+      "output": "src",
+      "support": {
+        "provider": "generated",
+        "profile": "std"
+      }
+    }
+  },
+  "host": {
+    "kind": "cargo",
+    "configuration": {}
+  }
+}

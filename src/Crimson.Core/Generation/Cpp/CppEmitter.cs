@@ -13,14 +13,14 @@ public sealed record GeneratedCppTargetTree(
 
 public sealed class CppEmitter
 {
-    private Dictionary<string, Declaration> _declarationsByQualifiedName = new(StringComparer.Ordinal);
+    private GenerationModelNavigator _model = null!;
     private CppTargetOptions _options = CppTargetOptions.Default;
     private const string SupportHeaderPath = "Crimson/Cpp/Support.g.hpp";
     private const string SupportNamespace = "::Crimson::Cpp";
 
     public void ValidateTargetSupport(CompilationSetModel compilation)
     {
-        var diagnostics = EnumerateDeclarations(compilation.Files.SelectMany(static file => file.Declarations))
+        var diagnostics = GenerationModelNavigator.EnumerateDeclarations(compilation.Files.SelectMany(static file => file.Declarations))
             .OfType<EnumDeclaration>()
             .Where(static declaration => declaration.AssociatedValueType is not null || declaration.Members.Any(static member => member.AssociatedValue is not null))
             .Select(static declaration => new Diagnostic(
@@ -39,11 +39,7 @@ public sealed class CppEmitter
     public GeneratedCppTargetTree Emit(CompilationSetModel compilation, CppTargetOptions? options = null)
     {
         _options = options ?? CppTargetOptions.Default;
-        _declarationsByQualifiedName = compilation.Files
-            .SelectMany(static file => EnumerateDeclarations(file.Declarations))
-            .Where(static declaration => declaration is not NamespaceDeclaration)
-            .GroupBy(static declaration => declaration.QualifiedName, StringComparer.Ordinal)
-            .ToDictionary(static declarations => declarations.Key, static declarations => declarations.First(), StringComparer.Ordinal);
+        _model = new GenerationModelNavigator(compilation);
 
         var generatedHeaders = new List<GeneratedFile>
         {
@@ -165,19 +161,14 @@ public sealed class CppEmitter
         }
     }
 
-    private static string GetDeclarationPath(Declaration declaration, string fileName)
-    {
-        var segments = declaration.NamespacePath.Concat(declaration.ContainingTypes).ToArray();
-        return segments.Length == 0
-            ? fileName
-            : Path.Combine(Path.Combine(segments), fileName);
-    }
+    private static string GetDeclarationPath(Declaration declaration, string fileName) =>
+        GenerationModelNavigator.GetDeclarationPath(declaration, fileName);
 
     private string RenderContractInterfaceHeader(InterfaceDeclaration declaration)
     {
         var builder = new StringBuilder();
         var includes = CollectNamedIncludes(
-            declaration.BaseContracts.Concat(GetEffectiveMembers(declaration).SelectMany(GetMemberTypes)),
+            declaration.BaseContracts.Concat(_model.GetEffectiveMembers(declaration).SelectMany(GetMemberTypes)),
             declaration,
             declaration);
 
@@ -186,7 +177,16 @@ public sealed class CppEmitter
 
         var baseNames = declaration.BaseContracts.Count == 0
             ? string.Empty
-            : " : " + string.Join(", ", declaration.BaseContracts.Select(baseContract => $"public {RenderContractType(baseContract, declaration)}"));
+            : " : " + string.Join(", ", declaration.BaseContracts.Select(baseContract =>
+            {
+                if (baseContract is NamedTypeReference named &&
+                    _model.ResolveNamedDeclaration(named, declaration) is InterfaceDeclaration baseInterface)
+                {
+                    return $"public {RenderResolvedTypeName(baseInterface, declaration, $"I{baseInterface.Name}")}";
+                }
+
+                return $"public {RenderContractType(baseContract, declaration)}";
+            }));
 
         builder.AppendLine($"class I{declaration.Name}{baseNames}");
         builder.AppendLine("{");
@@ -242,7 +242,7 @@ public sealed class CppEmitter
         builder.AppendLine($"    {declaration.Name}Generated() = default;");
         builder.AppendLine($"    ~{declaration.Name}Generated() override = default;");
 
-        var effectiveValues = GetEffectiveMembers(declaration).OfType<ValueMemberDeclaration>().ToArray();
+        var effectiveValues = _model.GetEffectiveMembers(declaration).OfType<ValueMemberDeclaration>().ToArray();
         if (effectiveValues.Length > 0)
         {
             builder.AppendLine();
@@ -294,7 +294,7 @@ public sealed class CppEmitter
 
         AppendNamespaceOpen(builder, declaration.NamespacePath);
 
-        foreach (var valueMember in GetEffectiveMembers(declaration).OfType<ValueMemberDeclaration>())
+        foreach (var valueMember in _model.GetEffectiveMembers(declaration).OfType<ValueMemberDeclaration>())
         {
             builder.AppendLine($"{RenderContractType(valueMember.Type, declaration)} {declaration.Name}Generated::Get{ToPascalCase(valueMember.Name)}() const");
             builder.AppendLine("{");
@@ -328,7 +328,7 @@ public sealed class CppEmitter
         builder.AppendLine($"    {declaration.Name}() = default;");
         builder.AppendLine($"    ~{declaration.Name}() override = default;");
 
-        var methods = GetEffectiveMembers(declaration).OfType<MethodMemberDeclaration>().ToArray();
+        var methods = _model.GetEffectiveMembers(declaration).OfType<MethodMemberDeclaration>().ToArray();
         if (methods.Length > 0)
         {
             builder.AppendLine();
@@ -353,7 +353,7 @@ public sealed class CppEmitter
 
         AppendNamespaceOpen(builder, declaration.NamespacePath);
 
-        foreach (var method in GetEffectiveMembers(declaration).OfType<MethodMemberDeclaration>())
+        foreach (var method in _model.GetEffectiveMembers(declaration).OfType<MethodMemberDeclaration>())
         {
             builder.AppendLine($"{RenderContractType(method.ReturnType, declaration)} {declaration.Name}::{ToPascalCase(method.Name)}({RenderParameters(method.Parameters, declaration, includeDefaults: false)})");
             builder.AppendLine("{");
@@ -527,7 +527,7 @@ public sealed class CppEmitter
         switch (type)
         {
             case NamedTypeReference named:
-                if (ResolveNamedDeclaration(named, scope) is { } declaration &&
+                if (_model.ResolveNamedDeclaration(named, scope) is { } declaration &&
                     !ReferenceEquals(declaration, currentDeclaration))
                 {
                     includes.Add(GetHeaderIncludePath(declaration));
@@ -622,7 +622,7 @@ public sealed class CppEmitter
         }
 
         if (type is NamedTypeReference named &&
-            ResolveNamedDeclaration(named, scope) is InterfaceDeclaration)
+            _model.ResolveNamedDeclaration(named, scope) is InterfaceDeclaration)
         {
             return renderedType;
         }
@@ -667,7 +667,7 @@ public sealed class CppEmitter
             PrimitiveTypeReference primitive when primitive.Name == "string" => $"{SupportNamespace}::String{{}}",
             PrimitiveTypeReference primitive when primitive.Name == "bool" => "false",
             PrimitiveTypeReference => "0",
-            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is InterfaceDeclaration => "nullptr",
+            NamedTypeReference named when _model.ResolveNamedDeclaration(named, scope) is InterfaceDeclaration => "nullptr",
             NamedTypeReference named when named.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(named with { IsNullable = false }, scope)}>{{}}",
             NamedTypeReference named => $"{RenderNamedType(named, scope)}{{}}",
             ListTypeReference list when list.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(list with { IsNullable = false }, scope)}>{{}}",
@@ -683,7 +683,7 @@ public sealed class CppEmitter
 
     private string RenderNamedType(NamedTypeReference named, Declaration scope)
     {
-        var resolved = ResolveNamedDeclaration(named, scope);
+        var resolved = _model.ResolveNamedDeclaration(named, scope);
         return resolved switch
         {
             InterfaceDeclaration interfaceDeclaration => $"{SupportNamespace}::InterfaceHandle<{RenderResolvedTypeName(interfaceDeclaration, scope, $"I{interfaceDeclaration.Name}")}>",
@@ -696,24 +696,13 @@ public sealed class CppEmitter
     private string RenderNamedValueExpression(NamedValueExpression namedValue, TypeReference declaredType, Declaration scope)
     {
         if (declaredType is NamedTypeReference namedType &&
-            ResolveNamedDeclaration(namedType, scope) is EnumDeclaration targetEnum)
+            _model.ResolveNamedDeclaration(namedType, scope) is EnumDeclaration targetEnum)
         {
-            var enumDeclaration = ResolveEnumReference(namedValue, targetEnum, scope) ?? targetEnum;
+            var enumDeclaration = _model.ResolveEnumReference(namedValue, targetEnum, scope) ?? targetEnum;
             return $"{RenderResolvedTypeName(enumDeclaration, scope, enumDeclaration.Name)}::{namedValue.Segments[^1]}";
         }
 
         return string.Join("::", namedValue.Segments);
-    }
-
-    private EnumDeclaration? ResolveEnumReference(NamedValueExpression namedValue, EnumDeclaration fallback, Declaration scope)
-    {
-        if (namedValue.Segments.Count <= 1)
-        {
-            return fallback;
-        }
-
-        var qualifier = new NamedTypeReference(namedValue.Segments.Take(namedValue.Segments.Count - 1).ToArray(), namedValue.IsGlobal, false, namedValue.Source);
-        return ResolveNamedDeclaration(qualifier, scope) as EnumDeclaration;
     }
 
     private static string RenderResolvedTypeName(Declaration declaration, Declaration scope, string localName)
@@ -731,97 +720,6 @@ public sealed class CppEmitter
         return $"::{string.Join("::", declaration.NamespacePath)}::{localName}";
     }
 
-    private Declaration? ResolveNamedDeclaration(NamedTypeReference named, Declaration scope)
-    {
-        if (named.IsGlobal)
-        {
-            return ResolveExact(named.Segments);
-        }
-
-        var scopeSegments = scope.NamespacePath.Concat(scope.ContainingTypes).Concat([scope.Name]).ToArray();
-        for (var index = scopeSegments.Length; index >= 0; index--)
-        {
-            var candidate = scopeSegments.Take(index).Concat(named.Segments).ToArray();
-            var resolved = ResolveExact(candidate);
-            if (resolved is not null)
-            {
-                return resolved;
-            }
-        }
-
-        if (scope is InterfaceDeclaration interfaceDeclaration)
-        {
-            foreach (var baseContract in interfaceDeclaration.BaseContracts.OfType<NamedTypeReference>())
-            {
-                if (ResolveNamedDeclaration(baseContract, interfaceDeclaration) is InterfaceDeclaration baseInterface)
-                {
-                    var resolved = ResolveNamedDeclaration(named, baseInterface);
-                    if (resolved is not null)
-                    {
-                        return resolved;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private Declaration? ResolveExact(IReadOnlyList<string> segments)
-    {
-        var key = string.Join(".", segments);
-        return _declarationsByQualifiedName.GetValueOrDefault(key);
-    }
-
-    private IReadOnlyList<InterfaceMember> GetEffectiveMembers(InterfaceDeclaration declaration)
-    {
-        var effective = new Dictionary<string, InterfaceMember>(StringComparer.Ordinal);
-
-        foreach (var baseContract in declaration.BaseContracts.OfType<NamedTypeReference>())
-        {
-            if (ResolveNamedDeclaration(baseContract, declaration) is InterfaceDeclaration baseInterface)
-            {
-                foreach (var member in GetEffectiveMembers(baseInterface))
-                {
-                    effective[member.Name] = member;
-                }
-            }
-        }
-
-        foreach (var member in declaration.Members)
-        {
-            effective[member.Name] = member;
-        }
-
-        return effective.Values.ToArray();
-    }
-
-    private static IEnumerable<Declaration> EnumerateDeclarations(IEnumerable<Declaration> declarations)
-    {
-        foreach (var declaration in declarations)
-        {
-            yield return declaration;
-
-            switch (declaration)
-            {
-                case NamespaceDeclaration namespaceDeclaration:
-                    foreach (var nested in EnumerateDeclarations(namespaceDeclaration.Members))
-                    {
-                        yield return nested;
-                    }
-
-                    break;
-
-                case InterfaceDeclaration interfaceDeclaration:
-                    foreach (var nested in EnumerateDeclarations(interfaceDeclaration.NestedDeclarations))
-                    {
-                        yield return nested;
-                    }
-
-                    break;
-            }
-        }
-    }
 
     private static string ToPascalCase(string identifier) =>
         string.Concat(identifier

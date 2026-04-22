@@ -15,9 +15,13 @@ Run("Init creates gitignore entries", InitCreatesGitIgnoreEntries);
 Run("Cpp init writes reusable CMake integration", CppInitWritesCMakeIntegration);
 Run("Cpp CMake GCC starter app builds and runs", CppCMakeGccStarterAppBuildsAndRuns);
 Run("Cpp CMake cross init writes generic toolchain scaffold", CppCMakeCrossInitWritesToolchainScaffold);
+Run("Rust Cargo init writes reusable build integration", RustCargoInitWritesBuildIntegration);
+Run("Rust Cargo starter app builds and runs", RustCargoStarterAppBuildsAndRuns);
+Run("Rust Cargo no_std init writes library scaffold", RustCargoNoStdInitWritesLibraryScaffold);
 Run("Init target name resolves to project file path", InitTargetNameResolvesToProjectFilePath);
 Run("CLI init requires explicit profile", CliInitRequiresExplicitProfile);
 Run("CLI init profiles list built in profiles", CliInitProfilesListBuiltInProfiles);
+Run("Rust example app runs from repo root without crimson on PATH", RustExampleRunsFromRepoRootWithoutCrimsonOnPath);
 return failures.Count == 0 ? 0 : 1;
 
 void Run(string name, Action body)
@@ -301,6 +305,83 @@ void CppCMakeCrossInitWritesToolchainScaffold()
     AssertContains("CMAKE_TOOLCHAIN_FILE", File.ReadAllText(presets));
 }
 
+void RustCargoInitWritesBuildIntegration()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "Billing.crimsonproj");
+    workspace.InitProject(projectFile, "rust-cargo", starter: false);
+
+    var cargoHelper = Path.Combine(root, ".crimson", "cargo", "Crimson.Cargo.rs");
+    if (!File.Exists(cargoHelper))
+    {
+        throw new InvalidOperationException("Cargo integration helper was not created.");
+    }
+
+    if (!File.Exists(Path.Combine(root, "Cargo.toml")))
+    {
+        throw new InvalidOperationException("Cargo.toml was not created.");
+    }
+
+    var gitIgnore = File.ReadAllText(Path.Combine(root, ".gitignore"));
+    AssertContains("target/", gitIgnore);
+}
+
+void RustCargoStarterAppBuildsAndRuns()
+{
+    if (!CommandExists("cargo"))
+    {
+        Console.WriteLine("SKIP Rust Cargo starter app builds and runs (cargo not installed)");
+        return;
+    }
+
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "Billing.crimsonproj");
+    workspace.InitProject(projectFile, "rust-cargo", starter: true);
+
+    var repoRoot = ResolveRepoRoot();
+    var cliProjectPath = Path.Combine(repoRoot, "src", "Crimson.Cli", "Crimson.Cli.csproj");
+    var run = new ExecResult(
+        "cargo",
+        ["run"],
+        root,
+        [
+            new KeyValuePair<string, string?>("CRIMSON_COMMAND", "dotnet"),
+            new KeyValuePair<string, string?>("CRIMSON_COMMAND_ARGUMENTS", $"run --project {cliProjectPath} --"),
+        ]).Run();
+
+    if (run.ExitCode != 0)
+    {
+        throw new InvalidOperationException($"Expected cargo run to succeed.{Environment.NewLine}{run.Output}");
+    }
+
+    AssertContains("Porch Light: 42%", run.Output);
+}
+
+void RustCargoNoStdInitWritesLibraryScaffold()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "Billing.crimsonproj");
+    workspace.InitProject(projectFile, "rust-cargo-no-std", starter: false);
+
+    var library = Path.Combine(root, "src", "lib.rs");
+    if (!File.Exists(library))
+    {
+        throw new InvalidOperationException("Rust no_std library scaffold was not created.");
+    }
+
+    AssertContains("#![no_std]", File.ReadAllText(library));
+    AssertContains("extern crate alloc;", File.ReadAllText(library));
+}
+
 void MsBuildIntegrationRespectsConfiguredOutputRoot()
 {
     var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
@@ -433,6 +514,28 @@ void ExampleAppRunsFromRepoRootWithoutCrimsonOnPath()
     AssertContains("Home: Willow Lane", result.Output);
 }
 
+void RustExampleRunsFromRepoRootWithoutCrimsonOnPath()
+{
+    if (!CommandExists("cargo"))
+    {
+        Console.WriteLine("SKIP Rust example app runs from repo root without crimson on PATH (cargo not installed)");
+        return;
+    }
+
+    var repoRoot = ResolveRepoRoot();
+    var result = new ExecResult(
+        "cargo",
+        ["run", "--manifest-path", Path.Combine(repoRoot, "examples", "RustDeviceDemo", "Cargo.toml")],
+        repoRoot).Run();
+
+    if (result.ExitCode != 0)
+    {
+        throw new InvalidOperationException($"Expected rust example app to run successfully.{Environment.NewLine}{result.Output}");
+    }
+
+    AssertContains("Porch Light: 42%", result.Output);
+}
+
 void InitTargetNameResolvesToProjectFilePath()
 {
     var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
@@ -482,6 +585,8 @@ void CliInitProfilesListBuiltInProfiles()
     AssertContains("cpp-cmake", result.Output);
     AssertContains("cpp-cmake-gcc", result.Output);
     AssertContains("cpp-cmake-cross", result.Output);
+    AssertContains("rust-cargo", result.Output);
+    AssertContains("rust-cargo-no-std", result.Output);
 }
 
 void AssertContains(string expectedSubstring, string actual)
@@ -495,8 +600,36 @@ void AssertContains(string expectedSubstring, string actual)
 static string ResolveRepoRoot() =>
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 
+static bool CommandExists(string command)
+{
+    var path = Environment.GetEnvironmentVariable("PATH");
+    if (string.IsNullOrWhiteSpace(path))
+    {
+        return false;
+    }
+
+    foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+    {
+        var candidate = Path.Combine(directory, command);
+        if (File.Exists(candidate))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 sealed class ExecResult(string fileName, IReadOnlyList<string> arguments, string workingDirectory)
 {
+    private readonly IReadOnlyList<KeyValuePair<string, string?>> _environmentVariables = Array.Empty<KeyValuePair<string, string?>>();
+
+    public ExecResult(string fileName, IReadOnlyList<string> arguments, string workingDirectory, IReadOnlyList<KeyValuePair<string, string?>> environmentVariables)
+        : this(fileName, arguments, workingDirectory)
+    {
+        _environmentVariables = environmentVariables;
+    }
+
     public int ExitCode { get; private set; }
     public string Output { get; private set; } = string.Empty;
 
@@ -514,6 +647,11 @@ sealed class ExecResult(string fileName, IReadOnlyList<string> arguments, string
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
+        }
+
+        foreach (var environmentVariable in _environmentVariables)
+        {
+            startInfo.Environment[environmentVariable.Key] = environmentVariable.Value;
         }
 
         using var process = System.Diagnostics.Process.Start(startInfo)

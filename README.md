@@ -57,12 +57,18 @@ List available init profiles:
 crimson init-profiles
 ```
 
-The built-in profiles currently include `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, and `cpp-cmake-cross`.
+The built-in profiles currently include `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, `cpp-cmake-cross`, `rust-cargo`, and `rust-cargo-no-std`.
 
 Build the included example project:
 
 ```bash
 crimson build examples/SmartHomeDemo/SmartHome.crimsonproj
+```
+
+Run the included Rust example:
+
+```bash
+cargo run --manifest-path examples/RustDeviceDemo/Cargo.toml
 ```
 
 Validate a project:
@@ -205,15 +211,21 @@ curl -L -o tools/antlr-4.13.1-complete.jar https://www.antlr.org/download/antlr-
 
 ## Example
 
-An example project is included in `examples/SmartHomeDemo`.
+Example projects are included in `examples/SmartHomeDemo` and `examples/RustDeviceDemo`.
 
-It demonstrates:
+`examples/SmartHomeDemo` demonstrates:
 
 - generated C# interfaces and class plumbing
 - user-owned code under `src/User`
 - automatic Crimson-triggered regeneration from a consuming C# project
 - capability-based swappability across vendor devices through `IDevice` and related interfaces
 - querying device features and tracing automation chains across the home
+
+`examples/RustDeviceDemo` demonstrates:
+
+- generated and user-owned Rust modules under `src/generated` and `src/user`
+- Cargo-triggered Crimson regeneration through a build script
+- a host-runnable Rust contract workflow using the new `rust` target
 
 ## Contributing
 

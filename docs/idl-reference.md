@@ -302,6 +302,39 @@ Supported `interfaceHandleStyle` values:
 
 This is intended as a generic codegen policy knob rather than a platform-specific feature.
 
+## Rust Target Notes
+
+The Rust target emits generated and user-owned modules under the configured output root.
+
+The default Rust target configuration is:
+
+```json
+{
+  "targets": {
+    "rust": {
+      "output": "src",
+      "support": {
+        "provider": "generated",
+        "profile": "std"
+      }
+    }
+  }
+}
+```
+
+Supported Rust support providers:
+
+- `generated`
+- `external`
+
+Supported Rust support profiles:
+
+- `std`
+- `no_std`
+
+With `generated` support, Crimson emits a support module at `crate::generated::crimson_support`.
+With `external` support, set `support.modulePath` to the module that provides the same aliases and helper types.
+
 ## Diagnostics
 
 Common validation failures include:

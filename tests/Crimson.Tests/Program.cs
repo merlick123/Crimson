@@ -4,6 +4,7 @@ using Crimson.Core;
 using Crimson.Core.Generation;
 using Crimson.Core.Generation.CSharp;
 using Crimson.Core.Generation.Cpp;
+using Crimson.Core.Generation.Rust;
 using Crimson.Core.Host;
 using Crimson.Core.Model;
 using Crimson.Core.Projects;
@@ -13,6 +14,7 @@ var tests = new (string Name, Action Body)[]
     ("Parse interface with docs and members", ParseInterfaceWithDocs),
     ("Emit CSharp files for interface", EmitCSharpFiles),
     ("Emit Cpp files for interface", EmitCppFiles),
+    ("Emit Rust files for interface", EmitRustFiles),
     ("Validate project catches unresolved types", ValidateProjectCatchesUnresolvedTypes),
     ("Constants require explicit values", ConstantsRequireExplicitValues),
     ("Split namespaces across files validate and generate", SplitNamespacesAcrossFilesValidateAndGenerate),
@@ -28,8 +30,14 @@ var tests = new (string Name, Action Body)[]
     ("Structs lower to concrete types", StructsLowerToConcreteTypes),
     ("Structs reject internal members", StructsRejectInternalMembers),
     ("Cpp raw pointer handle style updates support header", CppRawPointerHandleStyleUpdatesSupportHeader),
+    ("Cpp interface inheritance uses interface contracts", CppInterfaceInheritanceUsesInterfaceContracts),
     ("Abstract interfaces emit only interface projections", AbstractInterfacesEmitOnlyInterfaceProjection),
     ("Abstract interfaces emit only interface projections for Cpp", AbstractInterfacesEmitOnlyInterfaceProjectionCpp),
+    ("Abstract interfaces emit only interface projections for Rust", AbstractInterfacesEmitOnlyInterfaceProjectionRust),
+    ("Rust generated support profiles vary by target configuration", RustGeneratedSupportProfilesVaryByTargetConfiguration),
+    ("Rust external support omits generated support module", RustExternalSupportOmitsGeneratedSupportModule),
+    ("Rust concrete interfaces implement inherited traits", RustConcreteInterfacesImplementInheritedTraits),
+    ("Rust target rejects unsupported enum associated values", RustTargetRejectsUnsupportedEnumAssociatedValues),
     ("Nested type resolution through a base contract works", NestedTypeResolutionThroughBaseContractWorks),
     ("Global dot name resolution works", GlobalDotNameResolutionWorks),
     ("Relative name resolution prefers nearer scopes", RelativeNameResolutionPrefersNearerScopes),
@@ -181,6 +189,50 @@ static void EmitCppFiles()
     Assert.Contains("class CustomerServiceGenerated : public ICustomerService", generatedHeader.Content);
     Assert.Contains("::Crimson::Cpp::String GetName() const override;", generatedHeader.Content);
     Assert.Contains("throw std::runtime_error(\"Not implemented\");", userSource.Content);
+}
+
+static void EmitRustFiles()
+{
+    var emitter = new RustEmitter();
+    var compilation = new CompilationSetModel([
+        new CompilationUnitModel("test.idl", [
+            new NamespaceDeclaration(
+                "SmartHome",
+                [],
+                [],
+                [],
+                null,
+                [
+                    new InterfaceDeclaration(
+                        "LightDevice",
+                        ["SmartHome"],
+                        [],
+                        [],
+                        null,
+                        false,
+                        [],
+                        [
+                            new ValueMemberDeclaration("display_name", [], null, false, false, new PrimitiveTypeReference("string", false, null), null, null),
+                        ],
+                        [],
+                        null)
+                ],
+                null)
+        ])
+    ]);
+
+    var result = emitter.Emit(compilation, RustTargetOptions.Default);
+    Assert.True(result.GeneratedFiles.Any(x => string.Equals(x.RelativePath, "smart_home__light_device.rs", StringComparison.Ordinal)));
+    Assert.True(result.GeneratedFiles.Any(x => string.Equals(x.RelativePath, "crimson_support.rs", StringComparison.Ordinal)));
+    Assert.True(result.GeneratedFiles.Any(x => string.Equals(x.RelativePath, "mod.rs", StringComparison.Ordinal)));
+    Assert.True(result.UserFiles.Any(x => string.Equals(x.RelativePath, "smart_home__light_device.rs", StringComparison.Ordinal)));
+
+    var generatedModule = result.GeneratedFiles.Single(x => string.Equals(x.RelativePath, "smart_home__light_device.rs", StringComparison.Ordinal));
+    var userModule = result.UserFiles.Single(x => string.Equals(x.RelativePath, "smart_home__light_device.rs", StringComparison.Ordinal));
+    Assert.Contains("pub trait LightDeviceContract", generatedModule.Content);
+    Assert.Contains("pub struct LightDeviceGenerated", generatedModule.Content);
+    Assert.Contains("pub struct LightDevice", userModule.Content);
+    Assert.Contains("impl crate::generated::smart_home__light_device::LightDeviceContract for LightDevice", userModule.Content);
 }
 
 static void ValidateProjectCatchesUnresolvedTypes()
@@ -603,6 +655,28 @@ static void CppRawPointerHandleStyleUpdatesSupportHeader()
     Assert.Contains("using InterfaceHandle = T*;", supportHeader.Content);
 }
 
+static void CppInterfaceInheritanceUsesInterfaceContracts()
+{
+    var project = CreateTempProject("cpp-cmake");
+    WriteContract(project.Root, "contracts/device.idl", """
+namespace Demo {
+    abstract interface Device {
+        string describe();
+    }
+
+    interface LightDevice : Device {
+        int32 brightness_percent = 35;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "Demo", "ILightDevice.g.hpp");
+    Assert.Contains("class ILightDevice : public IDevice", generatedInterface);
+    Assert.DoesNotContain("InterfaceHandle<IDevice>", generatedInterface);
+}
+
 static void AbstractInterfacesEmitOnlyInterfaceProjection()
 {
     var project = CreateTempProject();
@@ -638,6 +712,136 @@ namespace Demo {
     Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "GeneratedHeaders", "Demo", "Device.g.hpp")));
     Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "UserHeaders", "Demo", "Device.hpp")));
     Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "UserSources", "Demo", "Device.cpp")));
+}
+
+static void AbstractInterfacesEmitOnlyInterfaceProjectionRust()
+{
+    var project = CreateTempProject("rust-cargo");
+    WriteContract(project.Root, "contracts/device.idl", """
+namespace Demo {
+    abstract interface Device {
+        string describe();
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    Assert.True(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "rust", "Generated", "demo__device.rs")));
+    Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "rust", "User", "demo__device.rs")));
+}
+
+static void RustGeneratedSupportProfilesVaryByTargetConfiguration()
+{
+    var emitter = new RustEmitter();
+    var compilation = new CompilationSetModel([
+        new CompilationUnitModel("test.idl", [
+            new NamespaceDeclaration(
+                "Demo",
+                [],
+                [],
+                [],
+                null,
+                [
+                    new InterfaceDeclaration(
+                        "Device",
+                        ["Demo"],
+                        [],
+                        [],
+                        null,
+                        true,
+                        [],
+                        [],
+                        [],
+                        null)
+                ],
+                null)
+        ])
+    ]);
+
+    var stdResult = emitter.Emit(compilation, RustTargetOptions.Default);
+    var stdSupport = stdResult.GeneratedFiles.Single(x => string.Equals(x.RelativePath, "crimson_support.rs", StringComparison.Ordinal));
+    Assert.Contains("use std::collections::BTreeMap;", stdSupport.Content);
+
+    var noStdResult = emitter.Emit(compilation, new RustTargetOptions("src", RustSupportOptions.NoStdDefault));
+    var noStdSupport = noStdResult.GeneratedFiles.Single(x => string.Equals(x.RelativePath, "crimson_support.rs", StringComparison.Ordinal));
+    Assert.Contains("extern crate alloc;", noStdSupport.Content);
+    Assert.Contains("use alloc::collections::BTreeMap;", noStdSupport.Content);
+}
+
+static void RustExternalSupportOmitsGeneratedSupportModule()
+{
+    var emitter = new RustEmitter();
+    var compilation = new CompilationSetModel([
+        new CompilationUnitModel("test.idl", [
+            new NamespaceDeclaration(
+                "Demo",
+                [],
+                [],
+                [],
+                null,
+                [
+                    new InterfaceDeclaration(
+                        "Registry",
+                        ["Demo"],
+                        [],
+                        [],
+                        null,
+                        false,
+                        [],
+                        [
+                            new ValueMemberDeclaration("display_name", [], null, false, false, new PrimitiveTypeReference("string", false, null), null, null),
+                        ],
+                        [],
+                        null)
+                ],
+                null)
+        ])
+    ]);
+
+    var result = emitter.Emit(compilation, new RustTargetOptions("src", new RustSupportOptions(RustSupportProvider.External, RustSupportProfile.Std, "crate::support")));
+    Assert.False(result.GeneratedFiles.Any(x => string.Equals(x.RelativePath, "crimson_support.rs", StringComparison.Ordinal)));
+    var generatedModule = result.GeneratedFiles.Single(x => string.Equals(x.RelativePath, "demo__registry.rs", StringComparison.Ordinal));
+    Assert.Contains("crate::support::String", generatedModule.Content);
+}
+
+static void RustConcreteInterfacesImplementInheritedTraits()
+{
+    var project = CreateTempProject("rust-cargo");
+    WriteContract(project.Root, "contracts/light.idl", """
+namespace Demo {
+    abstract interface Device {
+        string display_name;
+    }
+
+    interface LightDevice : Device {
+        int32 brightness_percent = 35;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedModule = ReadGeneratedRust(project.Root, "Generated", "demo__light_device.rs");
+    var userModule = ReadGeneratedRust(project.Root, "User", "demo__light_device.rs");
+    Assert.Contains("pub trait LightDeviceContract: crate::generated::demo__device::DeviceContract", generatedModule);
+    Assert.Contains("impl crate::generated::demo__device::DeviceContract for LightDevice", userModule);
+    Assert.Contains("impl crate::generated::demo__light_device::LightDeviceContract for LightDevice", userModule);
+}
+
+static void RustTargetRejectsUnsupportedEnumAssociatedValues()
+{
+    var project = CreateTempProject("rust-cargo");
+    WriteContract(project.Root, "contracts/http.idl", """
+namespace Demo {
+    enum HttpStatus : string {
+        Ok = "ok",
+    }
+}
+""");
+
+    var exception = Assert.Throws<DiagnosticException>(() => project.Workspace.ValidateProject(project.ProjectFile));
+    Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON302"), "Expected rust target associated enum diagnostic.");
 }
 
 static void NestedTypeResolutionThroughBaseContractWorks()
@@ -893,6 +1097,12 @@ static string ReadGenerated(string root, params string[] segments)
 static string ReadGeneratedCpp(string root, params string[] segments)
 {
     var path = Path.Combine([root, ".merge", "current", "targets", "cpp", .. segments]);
+    return File.ReadAllText(path);
+}
+
+static string ReadGeneratedRust(string root, params string[] segments)
+{
+    var path = Path.Combine([root, ".merge", "current", "targets", "rust", .. segments]);
     return File.ReadAllText(path);
 }
 

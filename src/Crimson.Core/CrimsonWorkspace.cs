@@ -2,6 +2,7 @@ using System.Text.Json;
 using Crimson.Core.Generation;
 using Crimson.Core.Generation.CSharp;
 using Crimson.Core.Generation.Cpp;
+using Crimson.Core.Generation.Rust;
 using Crimson.Core.Host;
 using Crimson.Core.Merge;
 using Crimson.Core.Model;
@@ -25,15 +26,17 @@ public sealed class CrimsonWorkspace
         IEnumerable<IHostIntegration>? hostIntegrations = null,
         IEnumerable<IProjectInitProfile>? initProfiles = null)
     {
-        var configuredEmitters = (emitters ?? [new CSharpTargetEmitter(), new CppTargetEmitter()])
+        var configuredEmitters = (emitters ?? [new CSharpTargetEmitter(), new CppTargetEmitter(), new RustTargetEmitter()])
             .ToArray();
-        var configuredHostIntegrations = (hostIntegrations ?? [new DotNetMsbuildHostIntegration(), new CMakeHostIntegration()])
+        var configuredHostIntegrations = (hostIntegrations ?? [new DotNetMsbuildHostIntegration(), new CMakeHostIntegration(), new CargoHostIntegration()])
             .ToArray();
         var configuredProfiles = (initProfiles ?? [
             new CSharpProjectInitProfile(),
             new CppCMakeProjectInitProfile(),
             new CppCMakeGccProjectInitProfile(),
             new CppCMakeCrossProjectInitProfile(),
+            new RustCargoProjectInitProfile(),
+            new RustCargoNoStdProjectInitProfile(),
         ])
             .ToArray();
 

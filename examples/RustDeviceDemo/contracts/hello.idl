@@ -1,0 +1,6 @@
+namespace SmartHome {
+    interface LightDevice {
+        string display_name;
+        int32 brightness_percent = 35;
+    }
+}
