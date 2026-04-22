@@ -12,27 +12,19 @@ public sealed class CSharpTargetEmitter : ITargetEmitter
 {
     private static readonly TargetOutputDescriptor[] OutputDescriptors =
     [
-        new("Generated", "Generated", TargetMergeMode.PreferGenerated),
-        new("User", "User", TargetMergeMode.ThreeWay),
+        new("Generated", "Generated", TargetMergeMode.PreferGenerated, TargetOutputContentType.SourceFiles, TargetOutputOwnership.Generated),
+        new("User", "User", TargetMergeMode.ThreeWay, TargetOutputContentType.SourceFiles, TargetOutputOwnership.UserOwned),
     ];
 
     private readonly CSharpEmitter _emitter = new();
 
     public string TargetName => "csharp";
 
-    public object? GetDefaultProjectOptions() => new
-    {
-        output = CSharpTargetOptions.Default.OutputRoot,
-    };
-
     public string ResolveOutputRoot(JsonElement configuration) =>
         ResolveOptions(configuration).OutputRoot;
 
     public IReadOnlyList<TargetOutputDescriptor> DescribeOutputs(JsonElement configuration) =>
         OutputDescriptors;
-
-    public void PrepareProject(string projectDirectory, JsonElement configuration) =>
-        CSharpBuildIntegration.Write(projectDirectory, ResolveOptions(configuration));
 
     public void ValidateTarget(CompilationSetModel compilation, JsonElement configuration)
     {

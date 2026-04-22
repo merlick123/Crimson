@@ -11,10 +11,25 @@ public enum TargetMergeMode
     PreferGenerated,
 }
 
+public enum TargetOutputContentType
+{
+    Other,
+    SourceFiles,
+    HeaderFiles,
+}
+
+public enum TargetOutputOwnership
+{
+    Generated,
+    UserOwned,
+}
+
 public sealed record TargetOutputDescriptor(
     string Name,
     string RelativeOutputPath,
-    TargetMergeMode MergeMode);
+    TargetMergeMode MergeMode,
+    TargetOutputContentType ContentType,
+    TargetOutputOwnership Ownership);
 
 public sealed record EmittedTargetOutput(
     string Name,
@@ -24,13 +39,9 @@ public interface ITargetEmitter
 {
     string TargetName { get; }
 
-    object? GetDefaultProjectOptions();
-
     string ResolveOutputRoot(JsonElement configuration);
 
     IReadOnlyList<TargetOutputDescriptor> DescribeOutputs(JsonElement configuration);
-
-    void PrepareProject(string projectDirectory, JsonElement configuration);
 
     void ValidateTarget(CompilationSetModel compilation, JsonElement configuration);
 

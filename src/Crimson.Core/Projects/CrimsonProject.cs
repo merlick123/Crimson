@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Crimson.Core.Host;
 using Crimson.Core.Utility;
 
 namespace Crimson.Core.Projects;
@@ -6,7 +7,8 @@ namespace Crimson.Core.Projects;
 public sealed record CrimsonProject(
     IReadOnlyList<string> Sources,
     IReadOnlyList<string> Excludes,
-    IReadOnlyDictionary<string, JsonElement> Targets);
+    IReadOnlyDictionary<string, JsonElement> Targets,
+    CrimsonProjectHost? Host);
 
 public sealed class CrimsonProjectFile
 {
@@ -33,6 +35,7 @@ public sealed class CrimsonProjectFile
                 Sources = project.Sources ?? Array.Empty<string>(),
                 Excludes = project.Excludes ?? Array.Empty<string>(),
                 Targets = project.Targets ?? new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase),
+                Host = project.Host,
             },
         };
     }

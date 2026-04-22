@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Crimson.Core.Generation;
 using Crimson.Core.Generation.CSharp;
+using Crimson.Core.Generation.Cpp;
+using Crimson.Core.Host;
 using Crimson.Core.Merge;
 using Crimson.Core.Model;
 using Crimson.Core.Parsing;
@@ -15,10 +17,23 @@ public sealed class CrimsonWorkspace
     private readonly TreeMergeEngine _mergeEngine = new();
     private readonly CrimsonValidator _validator = new();
     private readonly IReadOnlyDictionary<string, ITargetEmitter> _emitters;
+    private readonly IReadOnlyDictionary<string, IHostIntegration> _hostIntegrations;
+    private readonly IReadOnlyDictionary<string, IProjectInitProfile> _initProfiles;
 
-    public CrimsonWorkspace(IEnumerable<ITargetEmitter>? emitters = null)
+    public CrimsonWorkspace(
+        IEnumerable<ITargetEmitter>? emitters = null,
+        IEnumerable<IHostIntegration>? hostIntegrations = null,
+        IEnumerable<IProjectInitProfile>? initProfiles = null)
     {
-        var configuredEmitters = (emitters ?? [new CSharpTargetEmitter()])
+        var configuredEmitters = (emitters ?? [new CSharpTargetEmitter(), new CppTargetEmitter()])
+            .ToArray();
+        var configuredHostIntegrations = (hostIntegrations ?? [new DotNetMsbuildHostIntegration(), new CMakeHostIntegration()])
+            .ToArray();
+        var configuredProfiles = (initProfiles ?? [
+            new CSharpProjectInitProfile(),
+            new CppCMakeProjectInitProfile(),
+            new CppCMakeGccProjectInitProfile(),
+        ])
             .ToArray();
 
         _emitters = configuredEmitters
@@ -28,6 +43,24 @@ public sealed class CrimsonWorkspace
                 static group => group.Count() == 1
                     ? group.Single()
                     : throw new InvalidOperationException($"Multiple target emitters were registered for '{group.Key}'."),
+                StringComparer.OrdinalIgnoreCase);
+
+        _hostIntegrations = configuredHostIntegrations
+            .GroupBy(static hostIntegration => hostIntegration.HostName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group.Count() == 1
+                    ? group.Single()
+                    : throw new InvalidOperationException($"Multiple host integrations were registered for '{group.Key}'."),
+                StringComparer.OrdinalIgnoreCase);
+
+        _initProfiles = configuredProfiles
+            .GroupBy(static profile => profile.ProfileId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group.Count() == 1
+                    ? group.Single()
+                    : throw new InvalidOperationException($"Multiple init profiles were registered for '{group.Key}'."),
                 StringComparer.OrdinalIgnoreCase);
     }
 
@@ -47,20 +80,58 @@ public sealed class CrimsonWorkspace
     public string EmitAstJson(CompilationUnitModel model) =>
         JsonSerializer.Serialize(model, JsonDefaults.Options);
 
-    public void InitProject(string projectFilePath, bool starter)
+    public IReadOnlyList<ProjectInitProfileInfo> GetInitProfiles() =>
+        _initProfiles.Values
+            .OrderBy(static profile => profile.ProfileId, StringComparer.OrdinalIgnoreCase)
+            .Select(static profile => new ProjectInitProfileInfo(profile.ProfileId, profile.DisplayName, profile.Description))
+            .ToArray();
+
+    public void InitProject(string projectFilePath, string profileId, bool starter)
     {
         var fullPath = Path.GetFullPath(projectFilePath);
         var directory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("Project directory not found.");
+        if (!_initProfiles.TryGetValue(profileId, out var profile))
+        {
+            throw new InvalidOperationException($"Unknown init profile '{profileId}'. Run 'crimson init-profiles' to list available profiles.");
+        }
+
+        var projectName = Path.GetFileNameWithoutExtension(fullPath);
+        var plan = profile.CreatePlan(new ProjectInitContext(fullPath, directory, projectName, starter));
         Directory.CreateDirectory(directory);
-        var defaultTargets = _emitters.Values
-            .Select(emitter => (emitter.TargetName, Options: emitter.GetDefaultProjectOptions()))
-            .Where(static entry => entry.Options is not null)
-            .ToDictionary(static entry => entry.TargetName, static entry => entry.Options!, StringComparer.OrdinalIgnoreCase);
+        var configuredTargets = plan.Targets
+            .GroupBy(static target => target.TargetName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                static group => group.Key,
+                group => group.Count() == 1
+                    ? group.Single().Configuration
+                    : throw new InvalidOperationException($"Init profile '{profileId}' configured target '{group.Key}' multiple times."),
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var targetName in configuredTargets.Keys)
+        {
+            if (!_emitters.ContainsKey(targetName))
+            {
+                throw new InvalidOperationException($"Init profile '{profileId}' requires target '{targetName}', but no emitter is registered for it.");
+            }
+        }
+
+        if (plan.Host is not null && !_hostIntegrations.ContainsKey(plan.Host.HostName))
+        {
+            throw new InvalidOperationException($"Init profile '{profileId}' requires host integration '{plan.Host.HostName}', but it is not registered.");
+        }
+
         var project = new
         {
-            sources = new[] { "contracts/**/*.idl" },
-            excludes = Array.Empty<string>(),
-            targets = defaultTargets,
+            sources = plan.Sources,
+            excludes = plan.Excludes,
+            targets = configuredTargets,
+            host = plan.Host is null
+                ? null
+                : new
+                {
+                    kind = plan.Host.HostName,
+                    configuration = plan.Host.Configuration,
+                },
         };
 
         File.WriteAllText(fullPath, JsonSerializer.Serialize(project, JsonDefaults.Options));
@@ -68,16 +139,22 @@ public sealed class CrimsonWorkspace
         Directory.CreateDirectory(Path.Combine(directory, ".merge", "previous", "targets"));
         Directory.CreateDirectory(Path.Combine(directory, ".merge", "current", "targets"));
         Directory.CreateDirectory(Path.Combine(directory, ".merge", "backup"));
-        EnsureGitIgnore(directory);
 
-        foreach (var (targetName, options) in defaultTargets)
+        foreach (var file in plan.Files)
         {
-            _emitters[targetName].PrepareProject(directory, JsonSerializer.SerializeToElement(options, JsonDefaults.Options));
+            var path = Path.Combine(directory, file.RelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, file.Content);
         }
 
-        if (starter)
+        var loadedProject = CrimsonProjectFile.Load(fullPath);
+        var resolvedTargets = ResolveTargets(loadedProject).ToArray();
+        var resolvedHost = ResolveHostIntegration(loadedProject, resolvedTargets);
+        EnsureGitIgnore(directory, resolvedHost?.HostIntegration.GetGitIgnoreEntries(resolvedHost.Configuration) ?? Array.Empty<string>());
+
+        if (resolvedHost is not null)
         {
-            File.WriteAllText(Path.Combine(directory, "contracts", "hello.idl"), StarterIdl);
+            resolvedHost.HostIntegration.PrepareProject(fullPath, directory, resolvedHost.Configuration, resolvedHost.Targets);
         }
     }
 
@@ -85,7 +162,9 @@ public sealed class CrimsonWorkspace
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
         var compilation = ValidateFiles(project.ResolveSourceFiles());
-        ValidateTargets(project, compilation);
+        var targets = ResolveTargets(project).ToArray();
+        ValidateTargets(project, compilation, targets);
+        ValidateHost(project, targets);
     }
 
     public void Generate(string projectFilePath)
@@ -94,14 +173,16 @@ public sealed class CrimsonWorkspace
         var model = ValidateFiles(project.ResolveSourceFiles());
         var targets = ResolveTargets(project).ToArray();
         ValidateTargets(project, model, targets);
+        ValidateHost(project, targets);
 
         var currentRoot = Path.Combine(project.MergeStateDirectory, "current");
         RecreateDirectory(currentRoot);
 
+        var resolvedHost = ResolveHostIntegration(project, targets);
+        resolvedHost?.HostIntegration.PrepareProject(project.ProjectFilePath, project.ProjectDirectory, resolvedHost.Configuration, resolvedHost.Targets);
+
         foreach (var target in targets)
         {
-            target.Emitter.PrepareProject(project.ProjectDirectory, target.Configuration);
-
             var descriptors = target.Emitter.DescribeOutputs(target.Configuration)
                 .ToDictionary(static descriptor => descriptor.Name, StringComparer.OrdinalIgnoreCase);
             var outputs = target.Emitter.Emit(model, target.Configuration);
@@ -154,6 +235,10 @@ public sealed class CrimsonWorkspace
                 {
                     _mergeEngine.MirrorLocalTreeAsBase(projectRoot, stagedPreviousRoot);
                 }
+                else if (!Directory.EnumerateFiles(stagedPreviousRoot, "*", SearchOption.AllDirectories).Any())
+                {
+                    _mergeEngine.ReplaceTree(stagedCurrentRoot, stagedPreviousRoot);
+                }
 
                 var result = _mergeEngine.Merge(stagedPreviousRoot, projectRoot, stagedCurrentRoot, backupRoot);
                 updated.AddRange(result.UpdatedFiles.Select(file => PrefixMergedPath(target, descriptor, file)));
@@ -201,13 +286,17 @@ public sealed class CrimsonWorkspace
 
     private static void EnsureGitIgnore(string projectDirectory)
     {
+        EnsureGitIgnore(projectDirectory, Array.Empty<string>());
+    }
+
+    private static void EnsureGitIgnore(string projectDirectory, IEnumerable<string> additionalEntries)
+    {
         var gitIgnorePath = Path.Combine(projectDirectory, ".gitignore");
-        var requiredEntries = new[]
-        {
-            ".merge/previous/",
-            ".merge/current/",
-            ".merge/backup/",
-        };
+        var requiredEntries = new[] { ".merge/previous/", ".merge/current/", ".merge/backup/" }
+            .Concat(additionalEntries)
+            .Where(static entry => !string.IsNullOrWhiteSpace(entry))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
         if (!File.Exists(gitIgnorePath))
         {
@@ -225,28 +314,18 @@ public sealed class CrimsonWorkspace
         var prefix = File.ReadAllText(gitIgnorePath).EndsWith(Environment.NewLine, StringComparison.Ordinal) ? string.Empty : Environment.NewLine;
         File.AppendAllText(gitIgnorePath, prefix + string.Join(Environment.NewLine, missingEntries) + Environment.NewLine);
     }
-
-    private const string StarterIdl = """
-namespace Demo.Contracts {
-    /// Example service.
-    interface HelloService {
-        /// The display name.
-        string name;
-
-        /// Greets a user.
-        /// @param user_name The user name.
-        /// @return The greeting text.
-        string greet(string user_name);
-    }
-}
-""";
-
     private void ValidateTargets(CrimsonProjectFile project, CompilationSetModel compilation, IReadOnlyList<ConfiguredTarget>? resolvedTargets = null)
     {
         foreach (var target in resolvedTargets ?? ResolveTargets(project).ToArray())
         {
             target.Emitter.ValidateTarget(compilation, target.Configuration);
         }
+    }
+
+    private void ValidateHost(CrimsonProjectFile project, IReadOnlyList<ConfiguredTarget>? resolvedTargets = null)
+    {
+        var host = ResolveHostIntegration(project, resolvedTargets);
+        host?.HostIntegration.ValidateHost(project.ProjectFilePath, host.Configuration, host.Targets);
     }
 
     private IEnumerable<ConfiguredTarget> ResolveTargets(CrimsonProjectFile project)
@@ -258,17 +337,53 @@ namespace Demo.Contracts {
                 throw new InvalidOperationException($"No target emitter is registered for '{target.Key}'.");
             }
 
-            yield return new ConfiguredTarget(emitter, target.Value);
+            yield return new ConfiguredTarget(
+                emitter,
+                target.Value,
+                emitter.ResolveOutputRoot(target.Value),
+                emitter.DescribeOutputs(target.Value));
         }
+    }
+
+    private ConfiguredHostIntegration? ResolveHostIntegration(CrimsonProjectFile project, IReadOnlyList<ConfiguredTarget>? resolvedTargets = null)
+    {
+        if (project.Project.Host is null)
+        {
+            return null;
+        }
+
+        if (!_hostIntegrations.TryGetValue(project.Project.Host.Kind, out var hostIntegration))
+        {
+            throw new InvalidOperationException($"No host integration is registered for '{project.Project.Host.Kind}'.");
+        }
+
+        var targets = resolvedTargets ?? ResolveTargets(project).ToArray();
+        return new ConfiguredHostIntegration(
+            hostIntegration,
+            project.Project.Host.Configuration,
+            targets.Select(static target => new ResolvedHostTarget(
+                target.Emitter.TargetName,
+                target.OutputRoot,
+                target.Configuration,
+                target.Outputs)).ToArray());
     }
 
     private static string PrefixMergedPath(ConfiguredTarget target, TargetOutputDescriptor descriptor, string relativePath)
     {
-        var segments = new[] { target.Emitter.ResolveOutputRoot(target.Configuration), descriptor.RelativeOutputPath, relativePath }
+        var segments = new[] { target.OutputRoot, descriptor.RelativeOutputPath, relativePath }
             .Where(static segment => !string.IsNullOrWhiteSpace(segment))
             .ToArray();
         return Utility.PathHelpers.NormalizeRelativePath(Path.Combine(segments));
     }
 
-    private sealed record ConfiguredTarget(ITargetEmitter Emitter, JsonElement Configuration);
+    private sealed record ConfiguredTarget(
+        ITargetEmitter Emitter,
+        JsonElement Configuration,
+        string OutputRoot,
+        IReadOnlyList<TargetOutputDescriptor> Outputs);
+
+    private sealed record ConfiguredHostIntegration(
+        IHostIntegration HostIntegration,
+        JsonElement Configuration,
+        IReadOnlyList<ResolvedHostTarget> Targets);
 }

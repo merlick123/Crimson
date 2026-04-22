@@ -36,8 +36,15 @@ try
             var target = RequireArgument(args, 1, "Expected a project name or .crimsonproj path.");
             var projectFile = CrimsonProjectFile.ResolveInitProjectFilePath(target, Environment.CurrentDirectory);
             var starter = args.Contains("--starter", StringComparer.Ordinal);
-            workspace.InitProject(projectFile, starter);
+            var profile = RequireOptionValue(args, "--profile", "Expected --profile <id>. Run 'crimson init-profiles' to list available profiles.");
+            workspace.InitProject(projectFile, profile, starter);
             Console.WriteLine($"Initialized {projectFile}");
+            return 0;
+        }
+
+        case "init-profiles":
+        {
+            PrintInitProfiles(workspace);
             return 0;
         }
 
@@ -115,6 +122,30 @@ static int HandleMergeResult(MergeResult result)
 static string RequireArgument(string[] arguments, int index, string message) =>
     arguments.Length > index ? arguments[index] : throw new InvalidOperationException(message);
 
+static string RequireOptionValue(string[] arguments, string optionName, string message)
+{
+    for (var index = 0; index < arguments.Length; index++)
+    {
+        if (string.Equals(arguments[index], optionName, StringComparison.Ordinal))
+        {
+            if (index + 1 >= arguments.Length)
+            {
+                throw new InvalidOperationException(message);
+            }
+
+            return arguments[index + 1];
+        }
+
+        var prefix = optionName + "=";
+        if (arguments[index].StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return arguments[index][prefix.Length..];
+        }
+    }
+
+    throw new InvalidOperationException(message);
+}
+
 static string FormatDiagnostic(Diagnostic diagnostic)
 {
     if (diagnostic.Source is null)
@@ -130,7 +161,8 @@ static void PrintUsage()
     Console.WriteLine("Crimson CLI");
     Console.WriteLine();
     Console.WriteLine("Usage:");
-    Console.WriteLine("  crimson init <project-name|path> [--starter]");
+    Console.WriteLine("  crimson init <project-name|path> --profile <id> [--starter]");
+    Console.WriteLine("  crimson init-profiles");
     Console.WriteLine("  crimson parse <file.idl>");
     Console.WriteLine("  crimson validate <project.crimsonproj>");
     Console.WriteLine("  crimson generate <project.crimsonproj>");
@@ -139,7 +171,8 @@ static void PrintUsage()
     Console.WriteLine("  crimson help");
     Console.WriteLine();
     Console.WriteLine("Commands:");
-    Console.WriteLine("  init      Create a new Crimson project directory, project file, state folder, and .gitignore.");
+    Console.WriteLine("  init           Create a new Crimson project from an init profile.");
+    Console.WriteLine("  init-profiles  List available init profiles.");
     Console.WriteLine("  parse     Parse a single .idl file and emit the typed JSON AST.");
     Console.WriteLine("  validate  Parse and validate a Crimson project without generating output.");
     Console.WriteLine("  generate  Generate staged output into .merge/current.");
@@ -147,7 +180,19 @@ static void PrintUsage()
     Console.WriteLine("  build     Generate and merge in one step.");
     Console.WriteLine();
     Console.WriteLine("Examples:");
-    Console.WriteLine("  crimson init SmartHomeDemo --starter");
+    Console.WriteLine("  crimson init SmartHomeDemo --profile csharp --starter");
+    Console.WriteLine("  crimson init SensorNode --profile cpp-cmake-gcc --starter");
+    Console.WriteLine("  crimson init-profiles");
     Console.WriteLine("  crimson validate examples/SmartHomeDemo/SmartHome.crimsonproj");
     Console.WriteLine("  crimson build examples/SmartHomeDemo/SmartHome.crimsonproj");
+}
+
+static void PrintInitProfiles(CrimsonWorkspace workspace)
+{
+    Console.WriteLine("Available init profiles:");
+    foreach (var profile in workspace.GetInitProfiles())
+    {
+        Console.WriteLine($"  {profile.ProfileId,-18} {profile.DisplayName}");
+        Console.WriteLine($"    {profile.Description}");
+    }
 }
