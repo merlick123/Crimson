@@ -183,7 +183,7 @@ void CSharpStarterAppScaffoldBuildsAndRuns()
         throw new InvalidOperationException($"Expected scaffolded app to run successfully.{Environment.NewLine}{result.Output}");
     }
 
-    AssertContains("Crimson", result.Output);
+    AssertContains("Porch Light: 42%", result.Output);
 }
 
 void InitCreatesGitIgnoreEntries()
@@ -273,7 +273,7 @@ void CppCMakeGccStarterAppBuildsAndRuns()
         throw new InvalidOperationException($"Expected built cpp app to run successfully.{Environment.NewLine}{run.Output}");
     }
 
-    AssertContains("Crimson", run.Output);
+    AssertContains("Porch Light: 42%", run.Output);
 }
 
 void CppCMakeCrossInitWritesToolchainScaffold()

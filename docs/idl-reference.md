@@ -7,26 +7,26 @@ Crimson IDL describes contracts that lower into generated C# and C++ code.
 Crimson supports five top-level declaration kinds:
 
 ```idl
-namespace Demo.Contracts {
-    const int32 Answer = 42;
+namespace SmartHome {
+    const int32 DefaultBrightnessPercent = 42;
 
-    enum Mode {
-        Idle,
-        Active,
+    enum SceneMode {
+        Home,
+        Away,
     }
 
-    struct SensorSnapshot {
-        float64 dry_bulb_c;
+    struct LightSnapshot {
+        int32 brightness_percent;
     }
 
     abstract interface Device {
         readonly string device_id;
-        string describe();
+        string describe_state();
     }
 
-    interface Controller {
-        Mode mode = Idle;
-        void reset();
+    interface SceneController {
+        SceneMode mode = Home;
+        void apply_scene();
     }
 }
 ```
@@ -36,7 +36,7 @@ namespace Demo.Contracts {
 Namespaces can span multiple files.
 
 ```idl
-namespace Demo.Contracts {
+namespace SmartHome {
     interface Device;
 }
 ```
@@ -52,16 +52,16 @@ Concrete interfaces generate:
 Abstract interfaces generate only the interface projection.
 
 ```idl
-interface Controller {
-    string name;
-    void reset();
+interface LightDevice {
+    string display_name;
+    void turn_on();
 }
 ```
 
 ```idl
 abstract interface Device {
     readonly string device_id;
-    string describe();
+    string describe_state();
 }
 ```
 
@@ -87,10 +87,10 @@ Use them for DTO-style shapes such as:
 Example:
 
 ```idl
-struct SensorSnapshot {
-    float64 dry_bulb_c;
-    float64 wet_bulb_c;
-    bool door_closed = true;
+struct ClimateSnapshot {
+    float64 indoor_temperature_c;
+    float64 target_temperature_c;
+    bool away_mode_enabled = false;
 }
 ```
 
@@ -106,9 +106,10 @@ Rules:
 Enums can be declared without associated values:
 
 ```idl
-enum Mode {
-    Idle,
-    Active,
+enum SceneMode {
+    Home,
+    Away,
+    Night,
 }
 ```
 
@@ -218,14 +219,15 @@ Supported literal defaults:
 Enum-typed declarations can also use enum members as defaults:
 
 ```idl
-enum OvenPhase {
-    Idle,
-    Bake,
+enum SceneMode {
+    Home,
+    Away,
+    Night,
 }
 
-interface SteamBakeController {
-    OvenPhase phase = Idle;
-    OvenPhase target_phase = OvenPhase.Bake;
+interface DemoHomeRuntime {
+    SceneMode active_mode = Home;
+    SceneMode target_mode = SceneMode.Night;
 }
 ```
 
@@ -236,15 +238,15 @@ Shorthand enum member references resolve against the declared enum type. Qualifi
 Use `struct` for value-only types:
 
 ```idl
-namespace Demo {
-    struct SensorSnapshot {
-        string label;
-        float64 temperature_c;
+namespace SmartHome {
+    struct DeviceSnapshot {
+        string device_id;
+        float64 battery_percent;
     }
 
-    interface Controller {
-        SensorSnapshot latest;
-        list<SensorSnapshot> history;
+    interface DeviceRegistry {
+        DeviceSnapshot latest;
+        list<DeviceSnapshot> history;
     }
 }
 ```

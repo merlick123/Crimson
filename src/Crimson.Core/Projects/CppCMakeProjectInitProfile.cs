@@ -44,10 +44,10 @@ crimson_configure_cpp_target({{projectName}}App)
 """;
 
     internal const string StarterIdl = """
-namespace Demo.Contracts {
-    interface HelloService {
-        string name;
-        string greet(string user_name);
+namespace SmartHome {
+    interface LightDevice {
+        string display_name;
+        int32 brightness_percent = 35;
     }
 }
 """;
@@ -65,13 +65,14 @@ int main()
     internal const string StarterMain = """
 #include <iostream>
 
-#include "Demo/Contracts/HelloService.hpp"
+#include "SmartHome/LightDevice.hpp"
 
 int main()
 {
-    Demo::Contracts::HelloService service;
-    service.SetName("Crimson");
-    std::cout << service.GetName() << std::endl;
+    SmartHome::LightDevice light;
+    light.SetDisplayName("Porch Light");
+    light.SetBrightnessPercent(42);
+    std::cout << light.GetDisplayName() << ": " << light.GetBrightnessPercent() << "%" << std::endl;
     return 0;
 }
 """;

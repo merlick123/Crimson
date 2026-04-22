@@ -470,89 +470,89 @@ static void EnumDefaultsResolveInGeneratedCode()
 {
     var project = CreateTempProject("cpp-cmake");
     WriteContract(project.Root, "contracts/defaults.idl", """
-namespace Demo {
-    enum OvenPhase {
-        Idle,
-        Bake,
+namespace SmartHome {
+    enum SceneMode {
+        Home,
+        Away,
     }
 
-    interface SteamBakeController {
-        OvenPhase phase = Idle;
-        OvenPhase target_phase = OvenPhase.Bake;
+    interface DemoHomeRuntime {
+        SceneMode active_mode = Home;
+        SceneMode target_mode = SceneMode.Away;
     }
 }
 """);
 
     project.Workspace.Generate(project.ProjectFile);
 
-    var generatedCpp = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "Demo", "SteamBakeController.g.hpp");
-    Assert.Contains("OvenPhase phase_ = OvenPhase::Idle;", generatedCpp);
-    Assert.Contains("OvenPhase targetPhase_ = OvenPhase::Bake;", generatedCpp);
+    var generatedCpp = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "SmartHome", "DemoHomeRuntime.g.hpp");
+    Assert.Contains("SceneMode activeMode_ = SceneMode::Home;", generatedCpp);
+    Assert.Contains("SceneMode targetMode_ = SceneMode::Away;", generatedCpp);
 
     var generatedCsharpProject = CreateTempProject();
     WriteContract(generatedCsharpProject.Root, "contracts/defaults.idl", """
-namespace Demo {
-    enum OvenPhase {
-        Idle,
-        Bake,
+namespace SmartHome {
+    enum SceneMode {
+        Home,
+        Away,
     }
 
-    interface SteamBakeController {
-        OvenPhase phase = Idle;
-        OvenPhase target_phase = OvenPhase.Bake;
+    interface DemoHomeRuntime {
+        SceneMode active_mode = Home;
+        SceneMode target_mode = SceneMode.Away;
     }
 }
 """);
 
     generatedCsharpProject.Workspace.Generate(generatedCsharpProject.ProjectFile);
-    var generatedCsharp = ReadGenerated(generatedCsharpProject.Root, "Generated", "Demo", "SteamBakeController.g.cs");
-    Assert.Contains("private OvenPhase _phase = OvenPhase.Idle;", generatedCsharp);
-    Assert.Contains("private OvenPhase _targetPhase = OvenPhase.Bake;", generatedCsharp);
+    var generatedCsharp = ReadGenerated(generatedCsharpProject.Root, "Generated", "SmartHome", "DemoHomeRuntime.g.cs");
+    Assert.Contains("private SceneMode _activeMode = SceneMode.Home;", generatedCsharp);
+    Assert.Contains("private SceneMode _targetMode = SceneMode.Away;", generatedCsharp);
 }
 
 static void StructsLowerToConcreteTypes()
 {
     var project = CreateTempProject("cpp-cmake");
     WriteContract(project.Root, "contracts/value.idl", """
-namespace Demo {
-    struct SensorSnapshot {
-        string label;
+namespace SmartHome {
+    struct DeviceSnapshot {
+        string display_name;
     }
 
-    interface Controller {
-        SensorSnapshot latest;
-        list<SensorSnapshot> history;
+    interface DeviceRegistry {
+        DeviceSnapshot latest;
+        list<DeviceSnapshot> history;
     }
 }
 """);
 
     project.Workspace.Generate(project.ProjectFile);
 
-    var generatedCpp = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "Demo", "IController.g.hpp");
-    Assert.Contains("virtual SensorSnapshot GetLatest() const = 0;", generatedCpp);
-    Assert.Contains("virtual ::Crimson::Cpp::List<SensorSnapshot> GetHistory() const = 0;", generatedCpp);
-    Assert.True(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "GeneratedHeaders", "Demo", "SensorSnapshot.hpp")));
+    var generatedCpp = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "SmartHome", "IDeviceRegistry.g.hpp");
+    Assert.Contains("virtual DeviceSnapshot GetLatest() const = 0;", generatedCpp);
+    Assert.Contains("virtual ::Crimson::Cpp::List<DeviceSnapshot> GetHistory() const = 0;", generatedCpp);
+    Assert.True(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "GeneratedHeaders", "SmartHome", "DeviceSnapshot.hpp")));
 
     var csharpProject = CreateTempProject();
     WriteContract(csharpProject.Root, "contracts/value.idl", """
-namespace Demo {
-    struct SensorSnapshot {
-        string label;
+namespace SmartHome {
+    struct DeviceSnapshot {
+        string display_name;
     }
 
-    interface Controller {
-        SensorSnapshot latest;
-        list<SensorSnapshot> history;
+    interface DeviceRegistry {
+        DeviceSnapshot latest;
+        list<DeviceSnapshot> history;
     }
 }
 """);
 
     csharpProject.Workspace.Generate(csharpProject.ProjectFile);
 
-    var generatedCsharp = ReadGenerated(csharpProject.Root, "Generated", "Demo", "IController.g.cs");
-    Assert.Contains("SensorSnapshot Latest { get; set; }", generatedCsharp);
-    Assert.Contains("List<SensorSnapshot> History { get; set; }", generatedCsharp);
-    Assert.True(File.Exists(Path.Combine(csharpProject.Root, ".merge", "current", "targets", "csharp", "Generated", "Demo", "SensorSnapshot.g.cs")));
+    var generatedCsharp = ReadGenerated(csharpProject.Root, "Generated", "SmartHome", "IDeviceRegistry.g.cs");
+    Assert.Contains("DeviceSnapshot Latest { get; set; }", generatedCsharp);
+    Assert.Contains("List<DeviceSnapshot> History { get; set; }", generatedCsharp);
+    Assert.True(File.Exists(Path.Combine(csharpProject.Root, ".merge", "current", "targets", "csharp", "Generated", "SmartHome", "DeviceSnapshot.g.cs")));
 }
 
 static void StructsRejectInternalMembers()

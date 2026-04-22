@@ -46,16 +46,14 @@ public sealed class CSharpProjectInitProfile : IProjectInitProfile
 """;
 
     private const string StarterIdl = """
-namespace Demo.Contracts {
-    /// Example service.
-    interface HelloService {
-        /// The display name.
-        string name;
+namespace SmartHome {
+    /// Example smart-home device.
+    interface LightDevice {
+        /// Human-friendly device name.
+        string display_name;
 
-        /// Greets a user.
-        /// @param user_name The user name.
-        /// @return The greeting text.
-        string greet(string user_name);
+        /// Current brightness level.
+        int32 brightness_percent = 35;
     }
 }
 """;
@@ -65,10 +63,14 @@ Console.WriteLine("Crimson C# project ready.");
 """;
 
     private const string StarterProgram = """
-using Demo.Contracts;
+using SmartHome;
 
-var service = new HelloService();
-service.Name = "Crimson";
-Console.WriteLine(service.Name);
+var light = new LightDevice
+{
+    DisplayName = "Porch Light",
+    BrightnessPercent = 42,
+};
+
+Console.WriteLine($"{light.DisplayName}: {light.BrightnessPercent}%");
 """;
 }

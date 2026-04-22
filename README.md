@@ -80,20 +80,20 @@ crimson parse examples/SmartHomeDemo/contracts/core/smart_home.idl
 Value-only types should be declared as `struct`:
 
 ```idl
-namespace Demo {
-    enum OvenPhase {
-        Idle,
-        Bake,
+namespace SmartHome {
+    enum SceneMode {
+        Home,
+        Away,
     }
 
-    struct SensorSnapshot {
-        float64 dry_bulb_c;
-        float64 wet_bulb_c;
+    struct ClimateSnapshot {
+        float64 indoor_temperature_c;
+        float64 target_temperature_c;
     }
 
-    interface Controller {
-        OvenPhase phase = Idle;
-        SensorSnapshot latest;
+    interface DemoHomeRuntime {
+        SceneMode active_mode = Home;
+        ClimateSnapshot latest_climate;
     }
 }
 ```
