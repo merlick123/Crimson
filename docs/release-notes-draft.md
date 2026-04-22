@@ -1,13 +1,16 @@
 # Crimson Release Notes Draft
 
-This draft is intended for the first reviewed public release after the current first-release hardening work.
+This draft tracks the current release story for the repository and should stay aligned with the shipped CLI, built-in profiles, and example workflows.
 
 ## Highlights
 
+- Added a built-in C++ target alongside the existing C# workflow.
+- Added reusable CMake integration for C++ consumers.
+- Added built-in init profiles for `csharp`, `cpp-cmake`, and `cpp-cmake-gcc`.
 - Added semantic project validation with `crimson validate`.
 - Improved CLI diagnostics and build workflow polish.
 - Extracted reusable C# MSBuild integration for Crimson-generated projects.
-- Replaced the old sample with SmartHomeDemo, a stronger end-to-end example with:
+- Kept SmartHomeDemo as the main end-to-end C# example with:
   - automatic Crimson-triggered regeneration
   - generated/user-owned C# split
   - capability-based swappability through `IDevice` and `IDemoHomeRuntime`
@@ -16,20 +19,24 @@ This draft is intended for the first reviewed public release after the current f
 
 ## Current Scope
 
-Crimson currently focuses on a coherent C# vertical slice:
+Crimson currently includes these built-in workflows:
 
 - `.idl` parsing
 - semantic model + JSON AST export
 - validation
 - C# generation
+- C++ generation
 - staged merge-aware materialization
-- example-driven C# consumer workflow
+- MSBuild integration for C# consumers
+- CMake integration for C++ consumers
+- init profiles for `csharp`, `cpp-cmake`, and `cpp-cmake-gcc`
+- example-driven C# consumer workflow through `examples/SmartHomeDemo`
 
 ## Known Limits
 
-- Only the C# target is implemented.
 - Merge resolution is still conservative and file-level.
 - Interactive external merge tooling is not implemented yet.
+- Built-in target and host coverage is still intentionally narrow to the currently supported C#/.NET and C++/CMake workflows.
 - Higher-level generation planning such as flavors and deployment-driven selection is still future work.
 
 ## Suggested Install / Try
@@ -37,6 +44,7 @@ Crimson currently focuses on a coherent C# vertical slice:
 ```bash
 dotnet publish src/Crimson.Cli/Crimson.Cli.csproj -c Release -o .artifacts/crimson
 export PATH="$PWD/.artifacts/crimson:$PATH"
+crimson init-profiles
 crimson validate examples/SmartHomeDemo/SmartHome.crimsonproj
 dotnet run --project examples/SmartHomeDemo/app/SmartHomeDemo.App.csproj
 ```

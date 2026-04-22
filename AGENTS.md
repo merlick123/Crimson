@@ -20,7 +20,7 @@ This repository is designed to support both human contributors and coding agents
 - `src/Crimson.Core/Projects/` contains project file loading, source discovery, and init-profile abstractions and implementations.
 - `src/Crimson.Cli/` is the thin command-line entry point.
 - `.merge/` under a project root is merge state only: `previous`, `current`, and `backup`.
-- `.crimson/` under a project root is reserved for non-merge tool-owned assets such as host/build integration files. Emitters should stage generated code through the merge pipeline rather than writing directly under `.crimson/`.
+- `.crimson/` under a project root is reserved for tool-owned assets such as host/build integration files and related tool state. Emitters should stage generated code through the merge pipeline rather than writing directly under `.crimson/`.
 - Project initialization should flow through init profiles. New conceptual setups should be added as profiles rather than by hard-coding more `init` branches.
 
 ## Change Expectations
@@ -32,6 +32,7 @@ This repository is designed to support both human contributors and coding agents
   - workspace orchestration coverage proving the target works without core special-casing
   - an end-to-end scenario if the target has project integration behavior
 - If you add a new host integration or init profile, add workspace-level coverage proving it composes through the shared abstractions, plus an end-to-end scenario if it writes or consumes project assets.
+- When agent-made changes leave the repository at a stable point, the agent should recommend a git commit instead of leaving the checkpoint implicit.
 - Do not mix unrelated generated churn with logic changes.
 
 ## Verification

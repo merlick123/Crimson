@@ -5,12 +5,15 @@ Use this checklist before cutting a tagged Crimson release.
 ## Product
 
 - The README matches the current CLI and example workflow.
-- `examples/SmartHomeDemo` still demonstrates the intended first-release story:
+- `examples/SmartHomeDemo` still demonstrates the intended main C# example workflow:
   - generated/user code split
   - automatic C# build integration
   - capability-based swappability through `IDevice` and `IDemoHomeRuntime`
   - feature discovery and device-chain tracing
-- The current scope is still intentionally limited to the C# target.
+- The documented product scope is consistent across `README.md`, `docs/release-notes-draft.md`, and CLI help:
+  - built-in targets are C# and C++
+  - built-in host integrations are MSBuild and CMake
+  - built-in init profiles are `csharp`, `cpp-cmake`, and `cpp-cmake-gcc`
 
 ## Verification
 
@@ -19,6 +22,7 @@ Use this checklist before cutting a tagged Crimson release.
 - `dotnet run --project tests/Crimson.Tests/Crimson.Tests.csproj`
 - `dotnet run --project tests/Crimson.SystemTests/Crimson.SystemTests.csproj`
 - `dotnet publish src/Crimson.Cli/Crimson.Cli.csproj -c Release -o .artifacts/crimson`
+- `PATH="$PWD/.artifacts/crimson:$PATH" crimson init-profiles`
 - `PATH="$PWD/.artifacts/crimson:$PATH" crimson validate examples/SmartHomeDemo/SmartHome.crimsonproj`
 - `PATH="$PWD/.artifacts/crimson:$PATH" dotnet run --project examples/SmartHomeDemo/app/SmartHomeDemo.App.csproj`
 

@@ -8,20 +8,20 @@ Current scope in this repository:
 - an ANTLR-based parser that lowers `.idl` into a typed semantic model
 - semantic validation and diagnostics
 - JSON AST export
-- an initial C# generator
+- built-in C# and C++ generators
 - staged generation and conservative 3-way merge scaffolding
-- reusable MSBuild integration for C# consumers
+- reusable MSBuild and CMake host integrations
 - CLI commands for `init`, `parse`, `validate`, `generate`, `merge`, and `build`
 
 ## Status
 
 This is an early implementation.
 
-The current vertical slice is working, but the full design space discussed for Crimson is not complete yet. In particular:
+The current end-to-end workflows are working, but the full design space discussed for Crimson is not complete yet. In particular:
 
 - merge resolution is conservative and file-level
 - interactive external merge-tool support is not implemented yet
-- only the C# target is currently implemented
+- built-in target coverage is currently limited to C# and C++
 - higher-level generation planning such as flavors and deployment-driven output selection is not implemented yet
 
 ## Repository Layout
@@ -54,6 +54,8 @@ List available init profiles:
 ```bash
 crimson init-profiles
 ```
+
+The built-in profiles currently include `csharp`, `cpp-cmake`, and `cpp-cmake-gcc`.
 
 Build the included example project:
 

@@ -19,7 +19,7 @@ Required tools:
 For source-level iteration during development:
 
 ```bash
-dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- parse examples/SmartHomeDemo/contracts/home.idl
+dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- parse examples/SmartHomeDemo/contracts/core/smart_home.idl
 dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- validate examples/SmartHomeDemo/SmartHome.crimsonproj
 dotnet run --project src/Crimson.Cli/Crimson.Cli.csproj -- build examples/SmartHomeDemo/SmartHome.crimsonproj
 ```

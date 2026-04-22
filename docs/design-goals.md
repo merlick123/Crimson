@@ -1,6 +1,6 @@
 # Design Goals
 
-Crimson is intended to grow from an initial IDL-to-C# vertical slice into a target-agnostic interface-definition and generation platform. This document captures the design goals that should guide that growth.
+Crimson started as an IDL-to-C# vertical slice and is growing into a target-agnostic interface-definition and generation platform. This document captures the design goals that should guide that growth.
 
 ## Core Goals
 
@@ -63,7 +63,7 @@ Project-local state is split by concern:
 - `.merge/previous`: prior staged baseline used for merge comparison
 - `.merge/current`: newly generated staged output
 - `.merge/backup`: backups made while applying merges
-- `.crimson/`: non-merge tool assets only
+- `.crimson/`: tool-owned integration assets and related tool state that should not be merged into user-owned output
 
 The merge model should remain conservative. When in doubt, prefer a conflict over an unsafe automatic overwrite.
 
