@@ -50,7 +50,7 @@ void BuildPipelineCreatesOutput()
 
     Directory.CreateDirectory(Path.Combine(root, "contracts"));
     File.WriteAllText(Path.Combine(root, "contracts", "customer.idl"), """
-namespace Billing.Contracts {
+namespace Billing {
     interface CustomerService {
         string name;
         string get_customer(string customer_id);
@@ -64,8 +64,8 @@ namespace Billing.Contracts {
         throw new InvalidOperationException("Build reported merge conflicts unexpectedly.");
     }
 
-    var generated = Path.Combine(root, "src", "Generated", "Billing", "Contracts", "CustomerService.g.cs");
-    var user = Path.Combine(root, "src", "User", "Billing", "Contracts", "CustomerService.cs");
+    var generated = Path.Combine(root, "src", "Generated", "Billing", "CustomerService.g.cs");
+    var user = Path.Combine(root, "src", "User", "Billing", "CustomerService.cs");
 
     if (!File.Exists(generated))
     {
@@ -101,7 +101,7 @@ void BuildHealsMissingUserFiles()
 
     Directory.CreateDirectory(Path.Combine(root, "contracts"));
     File.WriteAllText(Path.Combine(root, "contracts", "customer.idl"), """
-namespace Billing.Contracts {
+namespace Billing {
     interface CustomerService {
         string name;
         string get_customer(string customer_id);
@@ -115,7 +115,7 @@ namespace Billing.Contracts {
         throw new InvalidOperationException("Initial build reported merge conflicts unexpectedly.");
     }
 
-    var userFile = Path.Combine(root, "src", "User", "Billing", "Contracts", "CustomerService.cs");
+    var userFile = Path.Combine(root, "src", "User", "Billing", "CustomerService.cs");
     if (!File.Exists(userFile))
     {
         throw new InvalidOperationException("User file was not created on initial build.");
@@ -398,7 +398,7 @@ void MsBuildIntegrationRespectsConfiguredOutputRoot()
 
     Directory.CreateDirectory(Path.Combine(root, "contracts"));
     File.WriteAllText(Path.Combine(root, "contracts", "customer.idl"), """
-namespace Billing.Contracts {
+namespace Billing {
     interface CustomerService {
         string name;
     }
@@ -430,7 +430,7 @@ namespace Billing.Contracts {
 """);
 
     File.WriteAllText(Path.Combine(appDirectory, "Program.cs"), """
-using Billing.Contracts;
+using Billing;
 
 var service = new CustomerService();
 Console.WriteLine(service.Name);
@@ -454,7 +454,7 @@ void BuildWithoutExistingMergeBaselinePreservesUserFiles()
 
     Directory.CreateDirectory(Path.Combine(root, "contracts"));
     File.WriteAllText(Path.Combine(root, "contracts", "customer.idl"), """
-namespace Billing.Contracts {
+namespace Billing {
     interface CustomerService {
         string get_customer(string customer_id);
     }
@@ -467,12 +467,12 @@ namespace Billing.Contracts {
         throw new InvalidOperationException("Initial build reported merge conflicts unexpectedly.");
     }
 
-    var userFile = Path.Combine(root, "src", "User", "Billing", "Contracts", "CustomerService.cs");
+    var userFile = Path.Combine(root, "src", "User", "Billing", "CustomerService.cs");
     var customized = """
 using System;
 using System.Collections.Generic;
 
-namespace Billing.Contracts;
+namespace Billing;
 
 public partial class CustomerService
 {

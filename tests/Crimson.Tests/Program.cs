@@ -70,7 +70,7 @@ return failures.Count == 0 ? 0 : 1;
 static void ParseInterfaceWithDocs()
 {
     var tempFile = CreateTempIdl("""
-namespace Company.Contracts {
+namespace Company {
     /// Customer API.
     interface CustomerService {
         /// The id.
@@ -107,7 +107,7 @@ static void EmitCSharpFiles()
     var compilation = new CompilationSetModel([
         new CompilationUnitModel("test.idl", [
             new NamespaceDeclaration(
-                "Company.Contracts",
+                "Company",
                 [],
                 [],
                 [],
@@ -115,7 +115,7 @@ static void EmitCSharpFiles()
                 [
                     new InterfaceDeclaration(
                         "CustomerService",
-                        ["Company", "Contracts"],
+                        ["Company"],
                         [],
                         [],
                         new DocumentationComment("Customer API.", new Dictionary<string, string>(), null, []),
@@ -150,7 +150,7 @@ static void EmitCppFiles()
     var compilation = new CompilationSetModel([
         new CompilationUnitModel("test.idl", [
             new NamespaceDeclaration(
-                "Company.Contracts",
+                "Company",
                 [],
                 [],
                 [],
@@ -158,7 +158,7 @@ static void EmitCppFiles()
                 [
                     new InterfaceDeclaration(
                         "CustomerService",
-                        ["Company", "Contracts"],
+                        ["Company"],
                         [],
                         [],
                         null,
@@ -244,7 +244,7 @@ static void ValidateProjectCatchesUnresolvedTypes()
     var projectFile = Path.Combine(root, "Broken.crimsonproj");
     workspace.InitProject(projectFile, "csharp", starter: false);
     File.WriteAllText(Path.Combine(root, "contracts", "broken.idl"), """
-namespace Demo.Contracts {
+namespace Demo {
     interface BrokenService {
         MissingType value;
     }
