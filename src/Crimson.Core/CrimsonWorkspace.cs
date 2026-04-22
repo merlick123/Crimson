@@ -33,6 +33,7 @@ public sealed class CrimsonWorkspace
             new CSharpProjectInitProfile(),
             new CppCMakeProjectInitProfile(),
             new CppCMakeGccProjectInitProfile(),
+            new CppCMakeCrossProjectInitProfile(),
         ])
             .ToArray();
 

@@ -14,6 +14,7 @@ Run("Example app runs from repo root without crimson on PATH", ExampleAppRunsFro
 Run("Init creates gitignore entries", InitCreatesGitIgnoreEntries);
 Run("Cpp init writes reusable CMake integration", CppInitWritesCMakeIntegration);
 Run("Cpp CMake GCC starter app builds and runs", CppCMakeGccStarterAppBuildsAndRuns);
+Run("Cpp CMake cross init writes generic toolchain scaffold", CppCMakeCrossInitWritesToolchainScaffold);
 Run("Init target name resolves to project file path", InitTargetNameResolvesToProjectFilePath);
 Run("CLI init requires explicit profile", CliInitRequiresExplicitProfile);
 Run("CLI init profiles list built in profiles", CliInitProfilesListBuiltInProfiles);
@@ -275,6 +276,31 @@ void CppCMakeGccStarterAppBuildsAndRuns()
     AssertContains("Crimson", run.Output);
 }
 
+void CppCMakeCrossInitWritesToolchainScaffold()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace();
+    var projectFile = Path.Combine(root, "Billing.crimsonproj");
+    workspace.InitProject(projectFile, "cpp-cmake-cross", starter: false);
+
+    var toolchain = Path.Combine(root, "cmake", "toolchains", "generic.cmake");
+    if (!File.Exists(toolchain))
+    {
+        throw new InvalidOperationException("Generic cross toolchain scaffold was not created.");
+    }
+
+    var presets = Path.Combine(root, "CMakePresets.json");
+    if (!File.Exists(presets))
+    {
+        throw new InvalidOperationException("CMakePresets.json was not created for cross profile.");
+    }
+
+    AssertContains("cross-debug", File.ReadAllText(presets));
+    AssertContains("CMAKE_TOOLCHAIN_FILE", File.ReadAllText(presets));
+}
+
 void MsBuildIntegrationRespectsConfiguredOutputRoot()
 {
     var root = Path.Combine(Path.GetTempPath(), $"crimson-system-{Guid.NewGuid():N}");
@@ -455,6 +481,7 @@ void CliInitProfilesListBuiltInProfiles()
     AssertContains("C# / .NET", result.Output);
     AssertContains("cpp-cmake", result.Output);
     AssertContains("cpp-cmake-gcc", result.Output);
+    AssertContains("cpp-cmake-cross", result.Output);
 }
 
 void AssertContains(string expectedSubstring, string actual)

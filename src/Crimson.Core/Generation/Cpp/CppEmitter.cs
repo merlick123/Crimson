@@ -14,6 +14,9 @@ public sealed record GeneratedCppTargetTree(
 public sealed class CppEmitter
 {
     private Dictionary<string, Declaration> _declarationsByQualifiedName = new(StringComparer.Ordinal);
+    private CppTargetOptions _options = CppTargetOptions.Default;
+    private const string SupportHeaderPath = "Crimson/Cpp/Support.g.hpp";
+    private const string SupportNamespace = "::Crimson::Cpp";
 
     public void ValidateTargetSupport(CompilationSetModel compilation)
     {
@@ -33,15 +36,19 @@ public sealed class CppEmitter
         }
     }
 
-    public GeneratedCppTargetTree Emit(CompilationSetModel compilation)
+    public GeneratedCppTargetTree Emit(CompilationSetModel compilation, CppTargetOptions? options = null)
     {
+        _options = options ?? CppTargetOptions.Default;
         _declarationsByQualifiedName = compilation.Files
             .SelectMany(static file => EnumerateDeclarations(file.Declarations))
             .Where(static declaration => declaration is not NamespaceDeclaration)
             .GroupBy(static declaration => declaration.QualifiedName, StringComparer.Ordinal)
             .ToDictionary(static declarations => declarations.Key, static declarations => declarations.First(), StringComparer.Ordinal);
 
-        var generatedHeaders = new List<GeneratedFile>();
+        var generatedHeaders = new List<GeneratedFile>
+        {
+            new(SupportHeaderPath, RenderSupportHeader()),
+        };
         var generatedSources = new List<GeneratedFile>();
         var userHeaders = new List<GeneratedFile>();
         var userSources = new List<GeneratedFile>();
@@ -52,6 +59,52 @@ public sealed class CppEmitter
         }
 
         return new GeneratedCppTargetTree(generatedHeaders, generatedSources, userHeaders, userSources);
+    }
+
+    private string RenderSupportHeader()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("#pragma once");
+        builder.AppendLine();
+        builder.AppendLine("#include <array>");
+        builder.AppendLine("#include <cstddef>");
+        builder.AppendLine("#include <cstdint>");
+        builder.AppendLine("#include <map>");
+        builder.AppendLine("#include <memory>");
+        builder.AppendLine("#include <optional>");
+        builder.AppendLine("#include <set>");
+        builder.AppendLine("#include <string>");
+        builder.AppendLine("#include <string_view>");
+        builder.AppendLine("#include <vector>");
+        builder.AppendLine();
+        builder.AppendLine("namespace Crimson::Cpp");
+        builder.AppendLine("{");
+        builder.AppendLine();
+        builder.AppendLine("using String = std::string;");
+        builder.AppendLine("using StringView = std::string_view;");
+        builder.AppendLine();
+        builder.AppendLine("template <typename T>");
+        builder.AppendLine("using Optional = std::optional<T>;");
+        builder.AppendLine();
+        builder.AppendLine("template <typename T>");
+        builder.AppendLine("using List = std::vector<T>;");
+        builder.AppendLine();
+        builder.AppendLine("template <typename T>");
+        builder.AppendLine("using Set = std::set<T>;");
+        builder.AppendLine();
+        builder.AppendLine("template <typename T, std::size_t Length>");
+        builder.AppendLine("using Array = std::array<T, Length>;");
+        builder.AppendLine();
+        builder.AppendLine("template <typename TKey, typename TValue>");
+        builder.AppendLine("using Map = std::map<TKey, TValue>;");
+        builder.AppendLine();
+        builder.AppendLine("template <typename T>");
+        builder.AppendLine(_options.InterfaceHandleStyle == CppInterfaceHandleStyle.RawPtr
+            ? "using InterfaceHandle = T*;"
+            : "using InterfaceHandle = std::shared_ptr<T>;");
+        builder.AppendLine();
+        builder.AppendLine("}");
+        return builder.ToString().TrimEnd() + Environment.NewLine;
     }
 
     private void EmitDeclaration(
@@ -139,7 +192,7 @@ public sealed class CppEmitter
 
         foreach (var constantMember in declaration.Members.OfType<ConstantMemberDeclaration>())
         {
-            builder.AppendLine($"    inline static constexpr {RenderConstantType(constantMember.Type, declaration)} {ToPascalCase(constantMember.Name)} = {RenderLiteral(constantMember.Value ?? throw new InvalidOperationException($"Constant member '{declaration.QualifiedName}.{constantMember.Name}' must declare a value."))};");
+            builder.AppendLine($"    inline static constexpr {RenderConstantType(constantMember.Type, declaration)} {ToPascalCase(constantMember.Name)} = {RenderValueExpression(constantMember.Value ?? throw new InvalidOperationException($"Constant member '{declaration.QualifiedName}.{constantMember.Name}' must declare a value."), constantMember.Type, declaration)};");
         }
 
         if (declaration.Members.OfType<ConstantMemberDeclaration>().Any())
@@ -337,7 +390,7 @@ public sealed class CppEmitter
         AppendNamespaceOpen(builder, declaration.NamespacePath);
         builder.AppendLine($"struct {declaration.Name} final");
         builder.AppendLine("{");
-        builder.AppendLine($"    inline static constexpr {RenderConstantType(declaration.Type, declaration)} Value = {RenderLiteral(declaration.Value ?? throw new InvalidOperationException($"Constant '{declaration.QualifiedName}' must declare a value."))};");
+        builder.AppendLine($"    inline static constexpr {RenderConstantType(declaration.Type, declaration)} Value = {RenderValueExpression(declaration.Value ?? throw new InvalidOperationException($"Constant '{declaration.QualifiedName}' must declare a value."), declaration.Type, declaration)};");
         builder.AppendLine("};");
         AppendNamespaceClose(builder, declaration.NamespacePath);
         return builder.ToString().TrimEnd() + Environment.NewLine;
@@ -365,15 +418,7 @@ public sealed class CppEmitter
 
     private static readonly string[] CommonIncludes =
     [
-        "<array>",
-        "<cstdint>",
-        "<map>",
-        "<memory>",
-        "<optional>",
-        "<set>",
-        "<string>",
-        "<string_view>",
-        "<vector>",
+        SupportHeaderPath,
     ];
 
     private static void AppendNamespaceOpen(StringBuilder builder, IReadOnlyList<string> namespacePath)
@@ -445,6 +490,7 @@ public sealed class CppEmitter
     private static string GetHeaderIncludePath(Declaration declaration) =>
         declaration switch
         {
+            InterfaceDeclaration interfaceDeclaration when IsValueContract(interfaceDeclaration) => PathHelpers.NormalizeRelativePath(GetDeclarationPath(interfaceDeclaration, $"{interfaceDeclaration.Name}.hpp")),
             InterfaceDeclaration interfaceDeclaration => PathHelpers.NormalizeRelativePath(GetDeclarationPath(interfaceDeclaration, $"I{interfaceDeclaration.Name}.g.hpp")),
             EnumDeclaration enumDeclaration => PathHelpers.NormalizeRelativePath(GetDeclarationPath(enumDeclaration, $"{enumDeclaration.Name}.g.hpp")),
             _ => PathHelpers.NormalizeRelativePath(GetDeclarationPath(declaration, $"{declaration.Name}.g.hpp")),
@@ -472,7 +518,7 @@ public sealed class CppEmitter
             PrimitiveTypeReference primitive => primitive.Name switch
             {
                 "bool" => "bool",
-                "string" => "std::string",
+                "string" => $"{SupportNamespace}::String",
                 "int8" => "std::int8_t",
                 "uint8" => "std::uint8_t",
                 "int16" => "std::int16_t",
@@ -486,18 +532,18 @@ public sealed class CppEmitter
                 _ => primitive.Name,
             },
             NamedTypeReference named => RenderNamedType(named, scope),
-            ListTypeReference list => $"std::vector<{RenderType(list.ElementType, scope)}>",
-            SetTypeReference set => $"std::set<{RenderType(set.ElementType, scope)}>",
-            MapTypeReference map => $"std::map<{RenderType(map.KeyType, scope)}, {RenderType(map.ValueType, scope)}>",
-            ArrayTypeReference array when array.Length is int length => $"std::array<{RenderType(array.ElementType, scope)}, {length}>",
-            ArrayTypeReference array => $"std::vector<{RenderType(array.ElementType, scope)}>",
+            ListTypeReference list => $"{SupportNamespace}::List<{RenderType(list.ElementType, scope)}>",
+            SetTypeReference set => $"{SupportNamespace}::Set<{RenderType(set.ElementType, scope)}>",
+            MapTypeReference map => $"{SupportNamespace}::Map<{RenderType(map.KeyType, scope)}, {RenderType(map.ValueType, scope)}>",
+            ArrayTypeReference array when array.Length is int length => $"{SupportNamespace}::Array<{RenderType(array.ElementType, scope)}, {length}>",
+            ArrayTypeReference array => $"{SupportNamespace}::List<{RenderType(array.ElementType, scope)}>",
             _ => throw new NotSupportedException($"Unsupported type: {type.GetType().Name}"),
         };
 
     private string RenderConstantType(TypeReference type, Declaration scope) =>
         type switch
         {
-            PrimitiveTypeReference primitive when primitive.Name == "string" => "std::string_view",
+            PrimitiveTypeReference primitive when primitive.Name == "string" => $"{SupportNamespace}::StringView",
             _ => RenderTypeCore(type, scope),
         };
 
@@ -508,22 +554,32 @@ public sealed class CppEmitter
             return renderedType;
         }
 
-        if (type is NamedTypeReference named && ResolveNamedDeclaration(named, scope) is InterfaceDeclaration)
+        if (type is NamedTypeReference named &&
+            ResolveNamedDeclaration(named, scope) is InterfaceDeclaration interfaceDeclaration &&
+            !IsValueContract(interfaceDeclaration))
         {
             return renderedType;
         }
 
-        return $"std::optional<{renderedType}>";
+        return $"{SupportNamespace}::Optional<{renderedType}>";
     }
 
     private string RenderParameters(IEnumerable<MethodParameter> parameters, Declaration scope, bool includeDefaults) =>
         string.Join(", ", parameters.Select(parameter =>
         {
             var defaultValue = includeDefaults && parameter.DefaultValue is not null
-                ? $" = {RenderLiteral(parameter.DefaultValue)}"
+                ? $" = {RenderValueExpression(parameter.DefaultValue, parameter.Type, scope)}"
                 : string.Empty;
             return $"{RenderContractType(parameter.Type, scope)} {ToCamelCase(parameter.Name)}{defaultValue}";
         }));
+
+    private string RenderValueExpression(ValueExpression expression, TypeReference declaredType, Declaration scope) =>
+        expression switch
+        {
+            LiteralValueExpression literalExpression => RenderLiteral(literalExpression.Value),
+            NamedValueExpression namedValue => RenderNamedValueExpression(namedValue, declaredType, scope),
+            _ => throw new NotSupportedException($"Unsupported value expression: {expression.GetType().Name}"),
+        };
 
     private static string RenderLiteral(LiteralValue literal) =>
         literal switch
@@ -535,26 +591,26 @@ public sealed class CppEmitter
             _ => throw new NotSupportedException($"Unsupported literal: {literal.GetType().Name}"),
         };
 
-    private string RenderDefaultValue(TypeReference type, LiteralValue? literal, Declaration scope) =>
-        literal is not null ? RenderLiteral(literal) : DefaultLiteral(type, scope);
+    private string RenderDefaultValue(TypeReference type, ValueExpression? valueExpression, Declaration scope) =>
+        valueExpression is not null ? RenderValueExpression(valueExpression, type, scope) : DefaultLiteral(type, scope);
 
     private string DefaultLiteral(TypeReference type, Declaration scope) =>
         type switch
         {
-            PrimitiveTypeReference primitive when primitive.IsNullable => "std::nullopt",
-            PrimitiveTypeReference primitive when primitive.Name == "string" => "std::string{}",
+            PrimitiveTypeReference primitive when primitive.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(primitive with { IsNullable = false }, scope)}>{{}}",
+            PrimitiveTypeReference primitive when primitive.Name == "string" => $"{SupportNamespace}::String{{}}",
             PrimitiveTypeReference primitive when primitive.Name == "bool" => "false",
             PrimitiveTypeReference => "0",
-            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is InterfaceDeclaration => "nullptr",
-            NamedTypeReference named when named.IsNullable => "std::nullopt",
+            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is InterfaceDeclaration interfaceDeclaration && !IsValueContract(interfaceDeclaration) => "nullptr",
+            NamedTypeReference named when named.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(named with { IsNullable = false }, scope)}>{{}}",
             NamedTypeReference named => $"{RenderNamedType(named, scope)}{{}}",
-            ListTypeReference list when list.IsNullable => "std::nullopt",
+            ListTypeReference list when list.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(list with { IsNullable = false }, scope)}>{{}}",
             ListTypeReference => "{}",
-            SetTypeReference set when set.IsNullable => "std::nullopt",
+            SetTypeReference set when set.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(set with { IsNullable = false }, scope)}>{{}}",
             SetTypeReference => "{}",
-            MapTypeReference map when map.IsNullable => "std::nullopt",
+            MapTypeReference map when map.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(map with { IsNullable = false }, scope)}>{{}}",
             MapTypeReference => "{}",
-            ArrayTypeReference array when array.IsNullable => "std::nullopt",
+            ArrayTypeReference array when array.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(array with { IsNullable = false }, scope)}>{{}}",
             ArrayTypeReference => "{}",
             _ => "{}",
         };
@@ -564,11 +620,38 @@ public sealed class CppEmitter
         var resolved = ResolveNamedDeclaration(named, scope);
         return resolved switch
         {
-            InterfaceDeclaration interfaceDeclaration => $"std::shared_ptr<{RenderResolvedTypeName(interfaceDeclaration, scope, $"I{interfaceDeclaration.Name}")}>",
+            InterfaceDeclaration interfaceDeclaration when IsValueContract(interfaceDeclaration) => RenderResolvedTypeName(interfaceDeclaration, scope, interfaceDeclaration.Name),
+            InterfaceDeclaration interfaceDeclaration => $"{SupportNamespace}::InterfaceHandle<{RenderResolvedTypeName(interfaceDeclaration, scope, $"I{interfaceDeclaration.Name}")}>",
             Declaration declaration => RenderResolvedTypeName(declaration, scope, declaration.Name),
             _ => string.Join("::", named.Segments),
         };
     }
+
+    private string RenderNamedValueExpression(NamedValueExpression namedValue, TypeReference declaredType, Declaration scope)
+    {
+        if (declaredType is NamedTypeReference namedType &&
+            ResolveNamedDeclaration(namedType, scope) is EnumDeclaration targetEnum)
+        {
+            var enumDeclaration = ResolveEnumReference(namedValue, targetEnum, scope) ?? targetEnum;
+            return $"{RenderResolvedTypeName(enumDeclaration, scope, enumDeclaration.Name)}::{namedValue.Segments[^1]}";
+        }
+
+        return string.Join("::", namedValue.Segments);
+    }
+
+    private EnumDeclaration? ResolveEnumReference(NamedValueExpression namedValue, EnumDeclaration fallback, Declaration scope)
+    {
+        if (namedValue.Segments.Count <= 1)
+        {
+            return fallback;
+        }
+
+        var qualifier = new NamedTypeReference(namedValue.Segments.Take(namedValue.Segments.Count - 1).ToArray(), namedValue.IsGlobal, false, namedValue.Source);
+        return ResolveNamedDeclaration(qualifier, scope) as EnumDeclaration;
+    }
+
+    private static bool IsValueContract(InterfaceDeclaration declaration) =>
+        declaration.Annotations.Any(annotation => string.Equals(annotation.Name.Split('.').Last(), "value", StringComparison.OrdinalIgnoreCase));
 
     private static string RenderResolvedTypeName(Declaration declaration, Declaration scope, string localName)
     {

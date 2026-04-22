@@ -159,6 +159,12 @@ public interface ICrimsonVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <return>The visitor result.</return>
 	Result VisitEnumMember([NotNull] CrimsonParser.EnumMemberContext context);
 	/// <summary>
+	/// Visit a parse tree produced by <see cref="CrimsonParser.valueExpression"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitValueExpression([NotNull] CrimsonParser.ValueExpressionContext context);
+	/// <summary>
 	/// Visit a parse tree produced by <see cref="CrimsonParser.annotation"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>

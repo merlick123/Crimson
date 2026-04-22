@@ -262,7 +262,7 @@ public sealed class CSharpEmitter
 
         builder.AppendLine($"public static class {declaration.Name}");
         builder.AppendLine("{");
-        builder.AppendLine($"    public const {RenderContractType(declaration.Type, declaration)} Value = {RenderLiteral(declaration.Value ?? throw new InvalidOperationException($"Constant '{declaration.QualifiedName}' must declare a value."))};");
+        builder.AppendLine($"    public const {RenderContractType(declaration.Type, declaration)} Value = {RenderValueExpression(declaration.Value ?? throw new InvalidOperationException($"Constant '{declaration.QualifiedName}' must declare a value."), declaration.Type, declaration)};");
         builder.AppendLine("}");
         return builder.ToString().TrimEnd() + Environment.NewLine;
     }
@@ -309,9 +309,17 @@ public sealed class CSharpEmitter
     private string RenderParameters(IEnumerable<MethodParameter> parameters, Declaration scope) =>
         string.Join(", ", parameters.Select(parameter =>
         {
-            var defaultValue = parameter.DefaultValue is null ? string.Empty : $" = {RenderLiteral(parameter.DefaultValue)}";
+            var defaultValue = parameter.DefaultValue is null ? string.Empty : $" = {RenderValueExpression(parameter.DefaultValue, parameter.Type, scope)}";
             return $"{RenderContractType(parameter.Type, scope)} {ToCamelCase(parameter.Name)}{defaultValue}";
         }));
+
+    private string RenderValueExpression(ValueExpression expression, TypeReference declaredType, Declaration scope) =>
+        expression switch
+        {
+            LiteralValueExpression literalExpression => RenderLiteral(literalExpression.Value),
+            NamedValueExpression namedValue => RenderNamedValueExpression(namedValue, declaredType, scope),
+            _ => throw new NotSupportedException($"Unsupported value expression: {expression.GetType().Name}"),
+        };
 
     private static string RenderLiteral(LiteralValue literal) =>
         literal switch
@@ -323,8 +331,8 @@ public sealed class CSharpEmitter
             _ => throw new NotSupportedException($"Unsupported literal: {literal.GetType().Name}"),
         };
 
-    private string RenderDefaultValue(TypeReference type, LiteralValue? literal, Declaration scope) =>
-        literal is not null ? RenderLiteral(literal) : DefaultLiteral(type, scope);
+    private string RenderDefaultValue(TypeReference type, ValueExpression? valueExpression, Declaration scope) =>
+        valueExpression is not null ? RenderValueExpression(valueExpression, type, scope) : DefaultLiteral(type, scope);
 
     private string DefaultLiteral(TypeReference type, Declaration scope) =>
         type.IsNullable ? "null" :
@@ -333,6 +341,8 @@ public sealed class CSharpEmitter
             PrimitiveTypeReference primitive when primitive.Name == "string" => "\"\"",
             PrimitiveTypeReference primitive when primitive.Name == "bool" => "false",
             PrimitiveTypeReference => "0",
+            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is EnumDeclaration => "default",
+            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is InterfaceDeclaration interfaceDeclaration && IsValueContract(interfaceDeclaration) => $"new {RenderResolvedTypeName(interfaceDeclaration, scope, interfaceDeclaration.Name)}()",
             ListTypeReference list => $"new List<{RenderType(list.ElementType, scope, preferInterfaceContracts: true)}>()",
             SetTypeReference set => $"new HashSet<{RenderType(set.ElementType, scope, preferInterfaceContracts: true)}>()",
             MapTypeReference map => $"new Dictionary<{RenderType(map.KeyType, scope, preferInterfaceContracts: true)}, {RenderType(map.ValueType, scope, preferInterfaceContracts: true)}>()",
@@ -346,11 +356,38 @@ public sealed class CSharpEmitter
         var resolved = ResolveNamedDeclaration(named, scope);
         return resolved switch
         {
+            InterfaceDeclaration interfaceDeclaration when IsValueContract(interfaceDeclaration) => RenderResolvedTypeName(interfaceDeclaration, scope, interfaceDeclaration.Name),
             InterfaceDeclaration interfaceDeclaration when preferInterfaceContracts => RenderResolvedTypeName(interfaceDeclaration, scope, $"I{interfaceDeclaration.Name}"),
             Declaration declaration => RenderResolvedTypeName(declaration, scope, declaration.Name),
             _ => string.Join(".", named.Segments),
         };
     }
+
+    private string RenderNamedValueExpression(NamedValueExpression namedValue, TypeReference declaredType, Declaration scope)
+    {
+        if (declaredType is NamedTypeReference namedType &&
+            ResolveNamedDeclaration(namedType, scope) is EnumDeclaration targetEnum)
+        {
+            var enumDeclaration = ResolveEnumReference(namedValue, targetEnum, scope) ?? targetEnum;
+            return $"{RenderResolvedTypeName(enumDeclaration, scope, enumDeclaration.Name)}.{namedValue.Segments[^1]}";
+        }
+
+        return namedValue.DisplayName;
+    }
+
+    private EnumDeclaration? ResolveEnumReference(NamedValueExpression namedValue, EnumDeclaration fallback, Declaration scope)
+    {
+        if (namedValue.Segments.Count <= 1)
+        {
+            return fallback;
+        }
+
+        var qualifier = new NamedTypeReference(namedValue.Segments.Take(namedValue.Segments.Count - 1).ToArray(), namedValue.IsGlobal, false, namedValue.Source);
+        return ResolveNamedDeclaration(qualifier, scope) as EnumDeclaration;
+    }
+
+    private static bool IsValueContract(InterfaceDeclaration declaration) =>
+        declaration.Annotations.Any(annotation => string.Equals(annotation.Name.Split('.').Last(), "value", StringComparison.OrdinalIgnoreCase));
 
     private static string RenderResolvedTypeName(Declaration declaration, Declaration scope, string localName)
     {

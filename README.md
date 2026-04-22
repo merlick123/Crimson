@@ -13,6 +13,8 @@ Current scope in this repository:
 - reusable MSBuild and CMake host integrations
 - CLI commands for `init`, `parse`, `validate`, `generate`, `merge`, and `build`
 
+For the IDL syntax and semantics, see `docs/idl-reference.md`.
+
 ## Status
 
 This is an early implementation.
@@ -55,7 +57,7 @@ List available init profiles:
 crimson init-profiles
 ```
 
-The built-in profiles currently include `csharp`, `cpp-cmake`, and `cpp-cmake-gcc`.
+The built-in profiles currently include `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, and `cpp-cmake-cross`.
 
 Build the included example project:
 
@@ -73,6 +75,28 @@ Parse an IDL file to JSON:
 
 ```bash
 crimson parse examples/SmartHomeDemo/contracts/core/smart_home.idl
+```
+
+DTO-style contracts can be marked with `@value` so generators lower references as concrete values instead of interface-shaped references:
+
+```idl
+namespace Demo {
+    enum OvenPhase {
+        Idle,
+        Bake,
+    }
+
+    @value
+    interface SensorSnapshot {
+        float64 dry_bulb_c;
+        float64 wet_bulb_c;
+    }
+
+    interface Controller {
+        OvenPhase phase = Idle;
+        SensorSnapshot latest;
+    }
+}
 ```
 
 ## Build From Source
@@ -126,6 +150,8 @@ Common runtime identifiers:
 - `win-x64`
 - `osx-arm64`
 - `osx-x64`
+
+For generic cross-compiled C++ projects, the `cpp-cmake-cross` init profile writes a reusable `cmake/toolchains/generic.cmake` scaffold and a matching `cross-debug` CMake preset.
 
 ## Releases
 

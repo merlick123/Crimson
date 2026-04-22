@@ -24,6 +24,10 @@ var tests = new (string Name, Action Body)[]
     ("Interface typed parameters returns and containers lower to Cpp contracts", InterfaceTypedParametersReturnsAndContainersLowerToCppContracts),
     ("Nullable types emit nullable CSharp", NullableTypesEmitNullableCSharp),
     ("Nullable types emit optional and shared_ptr Cpp", NullableTypesEmitNullableCpp),
+    ("Enum defaults resolve in generated code", EnumDefaultsResolveInGeneratedCode),
+    ("Value contracts lower to concrete types", ValueContractsLowerToConcreteTypes),
+    ("Abstract value contracts fail validation", AbstractValueContractsFailValidation),
+    ("Cpp raw pointer handle style updates support header", CppRawPointerHandleStyleUpdatesSupportHeader),
     ("Abstract interfaces emit only interface projections", AbstractInterfacesEmitOnlyInterfaceProjection),
     ("Abstract interfaces emit only interface projections for Cpp", AbstractInterfacesEmitOnlyInterfaceProjectionCpp),
     ("Nested type resolution through a base contract works", NestedTypeResolutionThroughBaseContractWorks),
@@ -175,7 +179,7 @@ static void EmitCppFiles()
     var generatedHeader = result.GeneratedHeaders.Single(x => string.Equals(Path.GetFileName(x.RelativePath), "CustomerService.g.hpp", StringComparison.Ordinal));
     var userSource = result.UserSources.Single(x => string.Equals(Path.GetFileName(x.RelativePath), "CustomerService.cpp", StringComparison.Ordinal));
     Assert.Contains("class CustomerServiceGenerated : public ICustomerService", generatedHeader.Content);
-    Assert.Contains("std::string GetName() const override;", generatedHeader.Content);
+    Assert.Contains("::Crimson::Cpp::String GetName() const override;", generatedHeader.Content);
     Assert.Contains("throw std::runtime_error(\"Not implemented\");", userSource.Content);
 }
 
@@ -391,7 +395,7 @@ namespace Demo {
     project.Workspace.Generate(project.ProjectFile);
 
     var generatedInterface = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "Demo", "IRegistry.g.hpp");
-    Assert.Contains("std::shared_ptr<IDevice> GetDevice(std::shared_ptr<IDevice> device, std::vector<std::shared_ptr<IDevice>> devices, std::set<std::shared_ptr<IDevice>> deviceSet, std::map<std::string, std::shared_ptr<IDevice>> deviceMap) = 0;", generatedInterface);
+    Assert.Contains("::Crimson::Cpp::InterfaceHandle<IDevice> GetDevice(::Crimson::Cpp::InterfaceHandle<IDevice> device, ::Crimson::Cpp::List<::Crimson::Cpp::InterfaceHandle<IDevice>> devices, ::Crimson::Cpp::Set<::Crimson::Cpp::InterfaceHandle<IDevice>> deviceSet, ::Crimson::Cpp::Map<::Crimson::Cpp::String, ::Crimson::Cpp::InterfaceHandle<IDevice>> deviceMap) = 0;", generatedInterface);
 }
 
 static void NullableTypesEmitNullableCSharp()
@@ -455,11 +459,149 @@ namespace Demo {
     project.Workspace.Generate(project.ProjectFile);
 
     var generatedInterface = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "Demo", "IRegistry.g.hpp");
-    Assert.Contains("virtual std::optional<std::string> GetDisplayName() const = 0;", generatedInterface);
-    Assert.Contains("virtual std::optional<std::vector<std::optional<std::string>>> GetAliases() const = 0;", generatedInterface);
-    Assert.Contains("virtual std::shared_ptr<IDevice> GetPrimaryDevice() const = 0;", generatedInterface);
-    Assert.Contains("virtual std::optional<std::map<std::string, std::shared_ptr<IDevice>>> GetDeviceMap() const = 0;", generatedInterface);
-    Assert.Contains("virtual std::optional<Mode> GetActiveMode() const = 0;", generatedInterface);
+    Assert.Contains("virtual ::Crimson::Cpp::Optional<::Crimson::Cpp::String> GetDisplayName() const = 0;", generatedInterface);
+    Assert.Contains("virtual ::Crimson::Cpp::Optional<::Crimson::Cpp::List<::Crimson::Cpp::Optional<::Crimson::Cpp::String>>> GetAliases() const = 0;", generatedInterface);
+    Assert.Contains("virtual ::Crimson::Cpp::InterfaceHandle<IDevice> GetPrimaryDevice() const = 0;", generatedInterface);
+    Assert.Contains("virtual ::Crimson::Cpp::Optional<::Crimson::Cpp::Map<::Crimson::Cpp::String, ::Crimson::Cpp::InterfaceHandle<IDevice>>> GetDeviceMap() const = 0;", generatedInterface);
+    Assert.Contains("virtual ::Crimson::Cpp::Optional<Mode> GetActiveMode() const = 0;", generatedInterface);
+}
+
+static void EnumDefaultsResolveInGeneratedCode()
+{
+    var project = CreateTempProject("cpp-cmake");
+    WriteContract(project.Root, "contracts/defaults.idl", """
+namespace Demo {
+    enum OvenPhase {
+        Idle,
+        Bake,
+    }
+
+    interface SteamBakeController {
+        OvenPhase phase = Idle;
+        OvenPhase target_phase = OvenPhase.Bake;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedCpp = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "Demo", "SteamBakeController.g.hpp");
+    Assert.Contains("OvenPhase phase_ = OvenPhase::Idle;", generatedCpp);
+    Assert.Contains("OvenPhase targetPhase_ = OvenPhase::Bake;", generatedCpp);
+
+    var generatedCsharpProject = CreateTempProject();
+    WriteContract(generatedCsharpProject.Root, "contracts/defaults.idl", """
+namespace Demo {
+    enum OvenPhase {
+        Idle,
+        Bake,
+    }
+
+    interface SteamBakeController {
+        OvenPhase phase = Idle;
+        OvenPhase target_phase = OvenPhase.Bake;
+    }
+}
+""");
+
+    generatedCsharpProject.Workspace.Generate(generatedCsharpProject.ProjectFile);
+    var generatedCsharp = ReadGenerated(generatedCsharpProject.Root, "Generated", "Demo", "SteamBakeController.g.cs");
+    Assert.Contains("private OvenPhase _phase = OvenPhase.Idle;", generatedCsharp);
+    Assert.Contains("private OvenPhase _targetPhase = OvenPhase.Bake;", generatedCsharp);
+}
+
+static void ValueContractsLowerToConcreteTypes()
+{
+    var project = CreateTempProject("cpp-cmake");
+    WriteContract(project.Root, "contracts/value.idl", """
+namespace Demo {
+    @value
+    interface SensorSnapshot {
+        string label;
+    }
+
+    interface Controller {
+        SensorSnapshot latest;
+        list<SensorSnapshot> history;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedCpp = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "Demo", "IController.g.hpp");
+    Assert.Contains("virtual SensorSnapshot GetLatest() const = 0;", generatedCpp);
+    Assert.Contains("virtual ::Crimson::Cpp::List<SensorSnapshot> GetHistory() const = 0;", generatedCpp);
+
+    var csharpProject = CreateTempProject();
+    WriteContract(csharpProject.Root, "contracts/value.idl", """
+namespace Demo {
+    @value
+    interface SensorSnapshot {
+        string label;
+    }
+
+    interface Controller {
+        SensorSnapshot latest;
+        list<SensorSnapshot> history;
+    }
+}
+""");
+
+    csharpProject.Workspace.Generate(csharpProject.ProjectFile);
+
+    var generatedCsharp = ReadGenerated(csharpProject.Root, "Generated", "Demo", "IController.g.cs");
+    Assert.Contains("SensorSnapshot Latest { get; set; }", generatedCsharp);
+    Assert.Contains("List<SensorSnapshot> History { get; set; }", generatedCsharp);
+}
+
+static void AbstractValueContractsFailValidation()
+{
+    var project = CreateTempProject();
+    WriteContract(project.Root, "contracts/value.idl", """
+namespace Demo {
+    @value
+    abstract interface Snapshot {
+        string label;
+    }
+}
+""");
+
+    var exception = Assert.Throws<DiagnosticException>(() => project.Workspace.ValidateProject(project.ProjectFile));
+    Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON117"), "Expected abstract value contract diagnostic.");
+}
+
+static void CppRawPointerHandleStyleUpdatesSupportHeader()
+{
+    var emitter = new CppEmitter();
+    var compilation = new CompilationSetModel([
+        new CompilationUnitModel("test.idl", [
+            new NamespaceDeclaration(
+                "Demo",
+                [],
+                [],
+                [],
+                null,
+                [
+                    new InterfaceDeclaration(
+                        "Device",
+                        ["Demo"],
+                        [],
+                        [],
+                        null,
+                        true,
+                        [],
+                        [],
+                        [],
+                        null)
+                ],
+                null)
+        ])
+    ]);
+
+    var result = emitter.Emit(compilation, new CppTargetOptions("cpp", CppInterfaceHandleStyle.RawPtr));
+    var supportHeader = result.GeneratedHeaders.Single(x => string.Equals(x.RelativePath, "Crimson/Cpp/Support.g.hpp", StringComparison.Ordinal));
+    Assert.Contains("using InterfaceHandle = T*;", supportHeader.Content);
 }
 
 static void AbstractInterfacesEmitOnlyInterfaceProjection()

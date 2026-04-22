@@ -97,7 +97,7 @@ internal sealed class SemanticModelBuilder(string filePath, CommonTokenStream to
                 member.Identifier().GetText(),
                 BuildAnnotations(member.annotation()),
                 GetDocumentation(member.Start),
-                member.literal() is null ? null : BuildLiteral(member.literal()),
+                member.valueExpression() is null ? null : BuildValueExpression(member.valueExpression()),
                 GetSource(member)))
             .ToArray() ?? Array.Empty<EnumMemberDeclaration>();
 
@@ -121,7 +121,7 @@ internal sealed class SemanticModelBuilder(string filePath, CommonTokenStream to
             BuildAnnotations(context.annotation()),
             GetDocumentation(context.Start),
             BuildTypeReference(context.typeReference()),
-            context.literal() is null ? null : BuildLiteral(context.literal()),
+            context.valueExpression() is null ? null : BuildValueExpression(context.valueExpression()),
             GetSource(context));
     }
 
@@ -134,7 +134,7 @@ internal sealed class SemanticModelBuilder(string filePath, CommonTokenStream to
                 BuildAnnotations(constantMember.annotation()),
                 GetDocumentation(constantMember.Start),
                 BuildTypeReference(constantMember.typeReference()),
-                constantMember.literal() is null ? null : BuildLiteral(constantMember.literal()),
+                constantMember.valueExpression() is null ? null : BuildValueExpression(constantMember.valueExpression()),
                 GetSource(constantMember));
         }
 
@@ -147,7 +147,7 @@ internal sealed class SemanticModelBuilder(string filePath, CommonTokenStream to
                 valueMember.memberModifier().Any(static x => x.READONLY() is not null),
                 valueMember.memberModifier().Any(static x => x.INTERNAL() is not null),
                 BuildTypeReference(valueMember.typeReference()),
-                valueMember.literal() is null ? null : BuildLiteral(valueMember.literal()),
+                valueMember.valueExpression() is null ? null : BuildValueExpression(valueMember.valueExpression()),
                 GetSource(valueMember));
         }
 
@@ -161,7 +161,7 @@ internal sealed class SemanticModelBuilder(string filePath, CommonTokenStream to
             methodMember.parameterList()?.parameter().Select(parameter => new MethodParameter(
                 parameter.Identifier().GetText(),
                 BuildTypeReference(parameter.typeReference()),
-                parameter.literal() is null ? null : BuildLiteral(parameter.literal()),
+                parameter.valueExpression() is null ? null : BuildValueExpression(parameter.valueExpression()),
                 BuildAnnotations(parameter.annotation()),
                 methodDocs is null || !methodDocs.Parameters.TryGetValue(parameter.Identifier().GetText(), out var parameterDoc)
                     ? null
@@ -267,6 +267,17 @@ internal sealed class SemanticModelBuilder(string filePath, CommonTokenStream to
         }
 
         return new BooleanLiteralValue(context.TRUE() is not null, GetSource(context));
+    }
+
+    private ValueExpression BuildValueExpression(CrimsonParser.ValueExpressionContext context)
+    {
+        if (context.literal() is { } literal)
+        {
+            return new LiteralValueExpression(BuildLiteral(literal), GetSource(context));
+        }
+
+        var qualifiedName = BuildQualifiedName(context.qualifiedName());
+        return new NamedValueExpression(qualifiedName.Segments, qualifiedName.IsGlobal, GetSource(context));
     }
 
     private DocumentationComment? GetDocumentation(IToken token)

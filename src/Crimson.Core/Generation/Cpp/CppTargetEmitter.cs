@@ -3,9 +3,15 @@ using Crimson.Core.Model;
 
 namespace Crimson.Core.Generation.Cpp;
 
-public sealed record CppTargetOptions(string OutputRoot)
+public enum CppInterfaceHandleStyle
 {
-    public static CppTargetOptions Default => new("cpp");
+    SharedPtr,
+    RawPtr,
+}
+
+public sealed record CppTargetOptions(string OutputRoot, CppInterfaceHandleStyle InterfaceHandleStyle)
+{
+    public static CppTargetOptions Default => new("cpp", CppInterfaceHandleStyle.SharedPtr);
 }
 
 public sealed class CppTargetEmitter : ITargetEmitter
@@ -35,7 +41,7 @@ public sealed class CppTargetEmitter : ITargetEmitter
 
     public IReadOnlyList<EmittedTargetOutput> Emit(CompilationSetModel compilation, JsonElement configuration)
     {
-        var result = _emitter.Emit(compilation);
+        var result = _emitter.Emit(compilation, ResolveOptions(configuration));
         return
         [
             new EmittedTargetOutput("GeneratedHeaders", result.GeneratedHeaders),
@@ -50,7 +56,20 @@ public sealed class CppTargetEmitter : ITargetEmitter
         var outputRoot = configuration.ValueKind == JsonValueKind.Object && configuration.TryGetProperty("output", out var outputElement)
             ? outputElement.GetString()
             : null;
+        var interfaceHandleStyle = configuration.ValueKind == JsonValueKind.Object &&
+                                   configuration.TryGetProperty("interfaceHandleStyle", out var interfaceHandleStyleElement) &&
+                                   interfaceHandleStyleElement.GetString() is { Length: > 0 } handleStyleText
+            ? ParseInterfaceHandleStyle(handleStyleText)
+            : CppTargetOptions.Default.InterfaceHandleStyle;
 
-        return new CppTargetOptions(outputRoot ?? CppTargetOptions.Default.OutputRoot);
+        return new CppTargetOptions(outputRoot ?? CppTargetOptions.Default.OutputRoot, interfaceHandleStyle);
     }
+
+    private static CppInterfaceHandleStyle ParseInterfaceHandleStyle(string value) =>
+        value.ToLowerInvariant() switch
+        {
+            "shared_ptr" or "sharedptr" or "shared" => CppInterfaceHandleStyle.SharedPtr,
+            "raw_ptr" or "rawptr" or "raw" or "observer" => CppInterfaceHandleStyle.RawPtr,
+            _ => throw new InvalidOperationException($"Unknown cpp interfaceHandleStyle '{value}'. Supported values: shared_ptr, raw_ptr."),
+        };
 }

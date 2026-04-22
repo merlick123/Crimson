@@ -102,7 +102,7 @@ public sealed class CrimsonValidator
                 ValidateNonVoidType(constantDeclaration.Type, constantDeclaration.Source, $"Constant '{constantDeclaration.QualifiedName}'");
                 ValidateTypeReference(constantDeclaration.Type, declaration.NamespacePath.Concat(declaration.ContainingTypes).ToArray(), declaration.Source);
                 ValidateRequiredConstantValue(constantDeclaration.Value, constantDeclaration.Source, $"Constant '{constantDeclaration.QualifiedName}'");
-                ValidateLiteralCompatibility(constantDeclaration.Type, constantDeclaration.Value, constantDeclaration.Source);
+                ValidateValueCompatibility(constantDeclaration.Type, constantDeclaration.Value, declaration.NamespacePath.Concat(declaration.ContainingTypes).ToArray(), constantDeclaration.Source);
                 break;
         }
     }
@@ -112,6 +112,15 @@ public sealed class CrimsonValidator
         var scope = declaration.NamespacePath.Concat(declaration.ContainingTypes).Concat([declaration.Name]).ToArray();
         var membersByName = new HashSet<string>(StringComparer.Ordinal);
         var resolvedBases = new List<InterfaceDeclaration>();
+
+        if (HasAnnotation(declaration.Annotations, "value") && declaration.IsAbstract)
+        {
+            _diagnostics.Add(new Diagnostic(
+                "CRIMSON117",
+                $"Interface '{declaration.QualifiedName}' is marked with '@value' but is abstract. Value contracts must be concrete.",
+                "error",
+                declaration.Source));
+        }
 
         foreach (var baseContract in declaration.BaseContracts)
         {
@@ -166,7 +175,7 @@ public sealed class CrimsonValidator
                 case ValueMemberDeclaration valueMember:
                     ValidateNonVoidType(valueMember.Type, valueMember.Source, $"Value member '{declaration.QualifiedName}.{valueMember.Name}'");
                     ValidateTypeReference(valueMember.Type, scope, valueMember.Source, declaration);
-                    ValidateLiteralCompatibility(valueMember.Type, valueMember.DefaultValue, valueMember.Source);
+                    ValidateValueCompatibility(valueMember.Type, valueMember.DefaultValue, scope, valueMember.Source, declaration);
                     break;
 
                 case MethodMemberDeclaration methodMember:
@@ -181,7 +190,7 @@ public sealed class CrimsonValidator
 
                         ValidateNonVoidType(parameter.Type, parameter.Source, $"Parameter '{declaration.QualifiedName}.{methodMember.Name}({parameter.Name})'");
                         ValidateTypeReference(parameter.Type, scope, parameter.Source, declaration);
-                        ValidateLiteralCompatibility(parameter.Type, parameter.DefaultValue, parameter.Source);
+                        ValidateValueCompatibility(parameter.Type, parameter.DefaultValue, scope, parameter.Source, declaration);
                     }
 
                     break;
@@ -190,7 +199,7 @@ public sealed class CrimsonValidator
                     ValidateNonVoidType(constantMember.Type, constantMember.Source, $"Constant member '{declaration.QualifiedName}.{constantMember.Name}'");
                     ValidateTypeReference(constantMember.Type, scope, constantMember.Source, declaration);
                     ValidateRequiredConstantValue(constantMember.Value, constantMember.Source, $"Constant member '{declaration.QualifiedName}.{constantMember.Name}'");
-                    ValidateLiteralCompatibility(constantMember.Type, constantMember.Value, constantMember.Source);
+                    ValidateValueCompatibility(constantMember.Type, constantMember.Value, scope, constantMember.Source, declaration);
                     break;
             }
         }
@@ -270,7 +279,7 @@ public sealed class CrimsonValidator
 
             if (declaration.AssociatedValueType is not null)
             {
-                ValidateLiteralCompatibility(declaration.AssociatedValueType, member.AssociatedValue, member.Source);
+                ValidateValueCompatibility(declaration.AssociatedValueType, member.AssociatedValue, scope, member.Source);
             }
         }
     }
@@ -339,13 +348,24 @@ public sealed class CrimsonValidator
         }
     }
 
-    private void ValidateLiteralCompatibility(TypeReference declaredType, LiteralValue? literal, SourceSpan? source)
+    private void ValidateValueCompatibility(TypeReference declaredType, ValueExpression? valueExpression, IReadOnlyList<string> scope, SourceSpan? source, InterfaceDeclaration? containingInterface = null)
     {
-        if (literal is null)
+        if (valueExpression is null)
         {
             return;
         }
 
+        if (valueExpression is LiteralValueExpression literalExpression)
+        {
+            ValidateLiteralCompatibility(declaredType, literalExpression.Value, source ?? literalExpression.Source);
+            return;
+        }
+
+        ValidateNamedValueCompatibility(declaredType, (NamedValueExpression)valueExpression, scope, source, containingInterface);
+    }
+
+    private void ValidateLiteralCompatibility(TypeReference declaredType, LiteralValue literal, SourceSpan? source)
+    {
         var isCompatible = declaredType switch
         {
             PrimitiveTypeReference primitive => primitive.Name switch
@@ -365,9 +385,92 @@ public sealed class CrimsonValidator
         }
     }
 
-    private void ValidateRequiredConstantValue(LiteralValue? literal, SourceSpan? source, string context)
+    private void ValidateNamedValueCompatibility(TypeReference declaredType, NamedValueExpression namedValue, IReadOnlyList<string> scope, SourceSpan? source, InterfaceDeclaration? containingInterface)
     {
-        if (literal is not null)
+        var enumDeclaration = ResolveDeclaredEnumType(declaredType, scope, containingInterface);
+        if (enumDeclaration is null)
+        {
+            _diagnostics.Add(new Diagnostic(
+                "CRIMSON115",
+                $"Named value '{namedValue.DisplayName}' is not compatible with declared type '{DescribeType(declaredType)}'. Named values currently resolve enum members only.",
+                "error",
+                source ?? namedValue.Source));
+            return;
+        }
+
+        if (TryResolveEnumMemberReference(enumDeclaration, namedValue, scope, containingInterface, out _, out var errorMessage))
+        {
+            return;
+        }
+
+        _diagnostics.Add(new Diagnostic("CRIMSON116", errorMessage ?? $"Unable to resolve enum member '{namedValue.DisplayName}'.", "error", source ?? namedValue.Source));
+    }
+
+    private EnumDeclaration? ResolveDeclaredEnumType(TypeReference declaredType, IReadOnlyList<string> scope, InterfaceDeclaration? containingInterface)
+    {
+        if (declaredType is not NamedTypeReference namedType)
+        {
+            return null;
+        }
+
+        return ResolveNamedType(namedType, scope, containingInterface).OfType<EnumDeclaration>().FirstOrDefault();
+    }
+
+    private bool TryResolveEnumMemberReference(
+        EnumDeclaration targetEnum,
+        NamedValueExpression namedValue,
+        IReadOnlyList<string> scope,
+        InterfaceDeclaration? containingInterface,
+        out EnumMemberDeclaration? member,
+        out string? errorMessage)
+    {
+        member = null;
+        errorMessage = null;
+
+        var memberName = namedValue.Segments[^1];
+        if (namedValue.Segments.Count == 1)
+        {
+            member = targetEnum.Members.FirstOrDefault(candidate => string.Equals(candidate.Name, memberName, StringComparison.Ordinal));
+            errorMessage = member is null
+                ? $"Enum '{targetEnum.QualifiedName}' does not contain member '{memberName}'."
+                : null;
+            return member is not null;
+        }
+
+        var qualifierSegments = namedValue.Segments.Take(namedValue.Segments.Count - 1).ToArray();
+        var qualifier = new NamedTypeReference(qualifierSegments, namedValue.IsGlobal, false, namedValue.Source);
+        var resolvedQualifier = ResolveNamedType(qualifier, scope, containingInterface).ToArray();
+        if (resolvedQualifier.Length == 0)
+        {
+            errorMessage = $"Unable to resolve enum qualifier '{qualifier.DisplayName}' for value '{namedValue.DisplayName}'.";
+            return false;
+        }
+
+        if (resolvedQualifier.FirstOrDefault() is not EnumDeclaration resolvedEnum)
+        {
+            errorMessage = $"Named value '{namedValue.DisplayName}' does not refer to an enum member.";
+            return false;
+        }
+
+        if (!string.Equals(resolvedEnum.QualifiedName, targetEnum.QualifiedName, StringComparison.Ordinal))
+        {
+            errorMessage = $"Named value '{namedValue.DisplayName}' refers to enum '{resolvedEnum.QualifiedName}', but declared type is '{targetEnum.QualifiedName}'.";
+            return false;
+        }
+
+        member = resolvedEnum.Members.FirstOrDefault(candidate => string.Equals(candidate.Name, memberName, StringComparison.Ordinal));
+        if (member is null)
+        {
+            errorMessage = $"Enum '{targetEnum.QualifiedName}' does not contain member '{memberName}'.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ValidateRequiredConstantValue(ValueExpression? valueExpression, SourceSpan? source, string context)
+    {
+        if (valueExpression is not null)
         {
             return;
         }
@@ -522,6 +625,9 @@ public sealed class CrimsonValidator
             ArrayTypeReference array => $"{DescribeType(array.ElementType)}[]",
             _ => typeReference.GetType().Name,
         };
+
+    private static bool HasAnnotation(IEnumerable<Annotation> annotations, string shortName) =>
+        annotations.Any(annotation => string.Equals(annotation.Name.Split('.').Last(), shortName, StringComparison.OrdinalIgnoreCase));
 
     private sealed record MemberOrigin(InterfaceDeclaration Origin, InterfaceMember Member);
 }

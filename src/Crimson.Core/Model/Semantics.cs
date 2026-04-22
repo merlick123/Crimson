@@ -36,6 +36,22 @@ public sealed record StringLiteralValue(string Value, SourceSpan? Source) : Lite
 public sealed record BooleanLiteralValue(bool Value, SourceSpan? Source) : LiteralValue(Source);
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(LiteralValueExpression), "literal")]
+[JsonDerivedType(typeof(NamedValueExpression), "named")]
+public abstract record ValueExpression(SourceSpan? Source);
+
+public sealed record LiteralValueExpression(LiteralValue Value, SourceSpan? Source) : ValueExpression(Source);
+
+public sealed record NamedValueExpression(
+    IReadOnlyList<string> Segments,
+    bool IsGlobal,
+    SourceSpan? Source)
+    : ValueExpression(Source)
+{
+    public string DisplayName => $"{(IsGlobal ? "." : string.Empty)}{string.Join(".", Segments)}";
+}
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(VoidTypeReference), "void")]
 [JsonDerivedType(typeof(PrimitiveTypeReference), "primitive")]
 [JsonDerivedType(typeof(NamedTypeReference), "named")]
@@ -133,7 +149,7 @@ public sealed record ConstantDeclaration(
     IReadOnlyList<Annotation> Annotations,
     DocumentationComment? Documentation,
     TypeReference Type,
-    LiteralValue? Value,
+    ValueExpression? Value,
     SourceSpan? Source)
     : Declaration(Name, NamespacePath, ContainingTypes, Annotations, Documentation, Source);
 
@@ -154,14 +170,14 @@ public sealed record ValueMemberDeclaration(
     bool IsReadonly,
     bool IsInternal,
     TypeReference Type,
-    LiteralValue? DefaultValue,
+    ValueExpression? DefaultValue,
     SourceSpan? Source)
     : InterfaceMember(Name, Annotations, Documentation, Source);
 
 public sealed record MethodParameter(
     string Name,
     TypeReference Type,
-    LiteralValue? DefaultValue,
+    ValueExpression? DefaultValue,
     IReadOnlyList<Annotation> Annotations,
     DocumentationComment? Documentation,
     SourceSpan? Source);
@@ -180,7 +196,7 @@ public sealed record ConstantMemberDeclaration(
     IReadOnlyList<Annotation> Annotations,
     DocumentationComment? Documentation,
     TypeReference Type,
-    LiteralValue? Value,
+    ValueExpression? Value,
     SourceSpan? Source)
     : InterfaceMember(Name, Annotations, Documentation, Source);
 
@@ -188,7 +204,7 @@ public sealed record EnumMemberDeclaration(
     string Name,
     IReadOnlyList<Annotation> Annotations,
     DocumentationComment? Documentation,
-    LiteralValue? AssociatedValue,
+    ValueExpression? AssociatedValue,
     SourceSpan? Source);
 
 public sealed record CompilationUnitModel(

@@ -46,15 +46,15 @@ interfaceMember
     ;
 
 constantDeclaration
-    : annotation* CONST typeReference Identifier (ASSIGN literal)? SEMI
+    : annotation* CONST typeReference Identifier (ASSIGN valueExpression)? SEMI
     ;
 
 constantMember
-    : annotation* CONST typeReference Identifier (ASSIGN literal)? SEMI
+    : annotation* CONST typeReference Identifier (ASSIGN valueExpression)? SEMI
     ;
 
 valueMember
-    : annotation* memberModifier* typeReference Identifier (ASSIGN literal)? SEMI
+    : annotation* memberModifier* typeReference Identifier (ASSIGN valueExpression)? SEMI
     ;
 
 memberModifier
@@ -71,7 +71,7 @@ parameterList
     ;
 
 parameter
-    : annotation* typeReference Identifier (ASSIGN literal)?
+    : annotation* typeReference Identifier (ASSIGN valueExpression)?
     ;
 
 enumDeclaration
@@ -92,7 +92,12 @@ enumMemberList
     ;
 
 enumMember
-    : annotation* Identifier (ASSIGN literal)?
+    : annotation* Identifier (ASSIGN valueExpression)?
+    ;
+
+valueExpression
+    : literal
+    | qualifiedName
     ;
 
 annotation
