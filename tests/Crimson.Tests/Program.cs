@@ -24,8 +24,11 @@ var tests = new (string Name, Action Body)[]
     ("Inherited member collision from different origins errors", InheritedMemberCollisionErrors),
     ("Interface typed parameters returns and containers lower to IName", InterfaceTypedParametersReturnsAndContainersLowerToIName),
     ("Interface typed parameters returns and containers lower to Cpp contracts", InterfaceTypedParametersReturnsAndContainersLowerToCppContracts),
+    ("Interface typed parameters returns and containers lower to Rust contracts", InterfaceTypedParametersReturnsAndContainersLowerToRustContracts),
     ("Nullable types emit nullable CSharp", NullableTypesEmitNullableCSharp),
     ("Nullable types emit optional and shared_ptr Cpp", NullableTypesEmitNullableCpp),
+    ("Nullable types emit optional and interface handles Rust", NullableTypesEmitNullableRust),
+    ("Floating defaults resolve in generated Rust code", FloatingDefaultsResolveInGeneratedRustCode),
     ("Enum defaults resolve in generated code", EnumDefaultsResolveInGeneratedCode),
     ("Structs lower to concrete types", StructsLowerToConcreteTypes),
     ("Structs reject internal members", StructsRejectInternalMembers),
@@ -35,6 +38,7 @@ var tests = new (string Name, Action Body)[]
     ("Abstract interfaces emit only interface projections for Cpp", AbstractInterfacesEmitOnlyInterfaceProjectionCpp),
     ("Abstract interfaces emit only interface projections for Rust", AbstractInterfacesEmitOnlyInterfaceProjectionRust),
     ("Rust generated support profiles vary by target configuration", RustGeneratedSupportProfilesVaryByTargetConfiguration),
+    ("Rust generated support uses shared mutable interface handles", RustGeneratedSupportUsesSharedMutableInterfaceHandles),
     ("Rust external support omits generated support module", RustExternalSupportOmitsGeneratedSupportModule),
     ("Rust concrete interfaces implement inherited traits", RustConcreteInterfacesImplementInheritedTraits),
     ("Rust target rejects unsupported enum associated values", RustTargetRejectsUnsupportedEnumAssociatedValues),
@@ -450,6 +454,27 @@ namespace Demo {
     Assert.Contains("::Crimson::Cpp::InterfaceHandle<IDevice> GetDevice(::Crimson::Cpp::InterfaceHandle<IDevice> device, ::Crimson::Cpp::List<::Crimson::Cpp::InterfaceHandle<IDevice>> devices, ::Crimson::Cpp::Set<::Crimson::Cpp::InterfaceHandle<IDevice>> deviceSet, ::Crimson::Cpp::Map<::Crimson::Cpp::String, ::Crimson::Cpp::InterfaceHandle<IDevice>> deviceMap) = 0;", generatedInterface);
 }
 
+static void InterfaceTypedParametersReturnsAndContainersLowerToRustContracts()
+{
+    var project = CreateTempProject("rust-cargo");
+    WriteContract(project.Root, "contracts/registry.idl", """
+namespace Demo {
+    abstract interface Device {
+        string describe();
+    }
+
+    interface Registry {
+        Device get_device(Device device, list<Device> devices, set<Device> device_set, map<string, Device> device_map);
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGeneratedRust(project.Root, "Generated", "demo__registry.rs");
+    Assert.Contains("fn get_device(&mut self, device: crate::generated::crimson_support::InterfaceHandle<dyn crate::generated::demo__device::DeviceContract>, devices: crate::generated::crimson_support::List<crate::generated::crimson_support::InterfaceHandle<dyn crate::generated::demo__device::DeviceContract>>, device_set: crate::generated::crimson_support::Set<crate::generated::crimson_support::InterfaceHandle<dyn crate::generated::demo__device::DeviceContract>>, device_map: crate::generated::crimson_support::Map<crate::generated::crimson_support::String, crate::generated::crimson_support::InterfaceHandle<dyn crate::generated::demo__device::DeviceContract>>) -> crate::generated::crimson_support::InterfaceHandle<dyn crate::generated::demo__device::DeviceContract>;", generatedInterface);
+}
+
 static void NullableTypesEmitNullableCSharp()
 {
     var project = CreateTempProject();
@@ -516,6 +541,57 @@ namespace Demo {
     Assert.Contains("virtual ::Crimson::Cpp::InterfaceHandle<IDevice> GetPrimaryDevice() const = 0;", generatedInterface);
     Assert.Contains("virtual ::Crimson::Cpp::Optional<::Crimson::Cpp::Map<::Crimson::Cpp::String, ::Crimson::Cpp::InterfaceHandle<IDevice>>> GetDeviceMap() const = 0;", generatedInterface);
     Assert.Contains("virtual ::Crimson::Cpp::Optional<Mode> GetActiveMode() const = 0;", generatedInterface);
+}
+
+static void NullableTypesEmitNullableRust()
+{
+    var project = CreateTempProject("rust-cargo");
+    WriteContract(project.Root, "contracts/nulls.idl", """
+namespace Demo {
+    abstract interface Device {
+        string? nickname;
+    }
+
+    enum Mode {
+        On,
+        Off,
+    }
+
+    interface Registry {
+        string? display_name;
+        list<string?>? aliases;
+        Device? primary_device;
+        map<string, Device?>? device_map;
+        Mode? active_mode;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGeneratedRust(project.Root, "Generated", "demo__registry.rs");
+    Assert.Contains("fn get_display_name(&self) -> crate::generated::crimson_support::Optional<crate::generated::crimson_support::String>;", generatedInterface);
+    Assert.Contains("fn get_aliases(&self) -> crate::generated::crimson_support::Optional<crate::generated::crimson_support::List<crate::generated::crimson_support::Optional<crate::generated::crimson_support::String>>>;", generatedInterface);
+    Assert.Contains("fn get_primary_device(&self) -> crate::generated::crimson_support::InterfaceHandle<dyn crate::generated::demo__device::DeviceContract>;", generatedInterface);
+    Assert.Contains("fn get_device_map(&self) -> crate::generated::crimson_support::Optional<crate::generated::crimson_support::Map<crate::generated::crimson_support::String, crate::generated::crimson_support::InterfaceHandle<dyn crate::generated::demo__device::DeviceContract>>>;", generatedInterface);
+    Assert.Contains("fn get_active_mode(&self) -> crate::generated::crimson_support::Optional<crate::generated::demo__mode::Mode>;", generatedInterface);
+}
+
+static void FloatingDefaultsResolveInGeneratedRustCode()
+{
+    var project = CreateTempProject("rust-cargo");
+    WriteContract(project.Root, "contracts/defaults.idl", """
+namespace SmartHome {
+    interface Thermostat {
+        float64 target_temperature = 21;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedRust = ReadGeneratedRust(project.Root, "Generated", "smart_home__thermostat.rs");
+    Assert.Contains("target_temperature: 21.0,", generatedRust);
 }
 
 static void EnumDefaultsResolveInGeneratedCode()
@@ -605,6 +681,27 @@ namespace SmartHome {
     Assert.Contains("DeviceSnapshot Latest { get; set; }", generatedCsharp);
     Assert.Contains("List<DeviceSnapshot> History { get; set; }", generatedCsharp);
     Assert.True(File.Exists(Path.Combine(csharpProject.Root, ".merge", "current", "targets", "csharp", "Generated", "SmartHome", "DeviceSnapshot.g.cs")));
+
+    var rustProject = CreateTempProject("rust-cargo");
+    WriteContract(rustProject.Root, "contracts/value.idl", """
+namespace SmartHome {
+    struct DeviceSnapshot {
+        string display_name;
+    }
+
+    interface DeviceRegistry {
+        DeviceSnapshot latest;
+        list<DeviceSnapshot> history;
+    }
+}
+""");
+
+    rustProject.Workspace.Generate(rustProject.ProjectFile);
+
+    var generatedRust = ReadGeneratedRust(rustProject.Root, "Generated", "smart_home__device_registry.rs");
+    Assert.Contains("fn get_latest(&self) -> crate::generated::smart_home__device_snapshot::DeviceSnapshot;", generatedRust);
+    Assert.Contains("fn get_history(&self) -> crate::generated::crimson_support::List<crate::generated::smart_home__device_snapshot::DeviceSnapshot>;", generatedRust);
+    Assert.True(File.Exists(Path.Combine(rustProject.Root, ".merge", "current", "targets", "rust", "Generated", "smart_home__device_snapshot.rs")));
 }
 
 static void StructsRejectInternalMembers()
@@ -673,7 +770,7 @@ namespace Demo {
     project.Workspace.Generate(project.ProjectFile);
 
     var generatedInterface = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "Demo", "ILightDevice.g.hpp");
-    Assert.Contains("class ILightDevice : public IDevice", generatedInterface);
+    Assert.Contains("class ILightDevice : public virtual IDevice", generatedInterface);
     Assert.DoesNotContain("InterfaceHandle<IDevice>", generatedInterface);
 }
 
@@ -767,6 +864,42 @@ static void RustGeneratedSupportProfilesVaryByTargetConfiguration()
     var noStdSupport = noStdResult.GeneratedFiles.Single(x => string.Equals(x.RelativePath, "crimson_support.rs", StringComparison.Ordinal));
     Assert.Contains("extern crate alloc;", noStdSupport.Content);
     Assert.Contains("use alloc::collections::BTreeMap;", noStdSupport.Content);
+}
+
+static void RustGeneratedSupportUsesSharedMutableInterfaceHandles()
+{
+    var emitter = new RustEmitter();
+    var compilation = new CompilationSetModel([
+        new CompilationUnitModel("test.idl", [
+            new NamespaceDeclaration(
+                "Demo",
+                [],
+                [],
+                [],
+                null,
+                [
+                    new InterfaceDeclaration(
+                        "Device",
+                        ["Demo"],
+                        [],
+                        [],
+                        null,
+                        true,
+                        [],
+                        [],
+                        [],
+                        null)
+                ],
+                null)
+        ])
+    ]);
+
+    var result = emitter.Emit(compilation, RustTargetOptions.Default);
+    var support = result.GeneratedFiles.Single(x => string.Equals(x.RelativePath, "crimson_support.rs", StringComparison.Ordinal));
+    Assert.Contains("use core::cell::RefCell;", support.Content);
+    Assert.Contains("use std::rc::Rc;", support.Content);
+    Assert.Contains("pub type InterfaceHandle<T> = core::option::Option<Rc<RefCell<Box<T>>>>;", support.Content);
+    Assert.Contains("pub fn with_interface_mut<T: ?Sized, TResult>(handle: &InterfaceHandle<T>, f: impl FnOnce(&mut T) -> TResult) -> Option<TResult>", support.Content);
 }
 
 static void RustExternalSupportOmitsGeneratedSupportModule()

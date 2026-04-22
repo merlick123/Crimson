@@ -1,6 +1,8 @@
 # RustDeviceDemo
 
-RustDeviceDemo is the main Crimson Rust example.
+RustDeviceDemo is a small standalone Rust starter example.
+
+For the canonical rich cross-target demo, use `examples/SmartHomeDemo`.
 
 It demonstrates:
 

@@ -21,16 +21,12 @@ public sealed class DotNetMsbuildHostIntegration : IHostIntegration
 
     public void ValidateHost(string projectFilePath, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
     {
-        if (!targets.Any(static target => string.Equals(target.TargetName, "csharp", StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException($"Host integration '{HostName}' requires a 'csharp' target in '{projectFilePath}'.");
-        }
+        _ = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "csharp");
     }
 
     public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
     {
-        var csharpTarget = targets.SingleOrDefault(static target => string.Equals(target.TargetName, "csharp", StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException($"Host integration '{HostName}' requires a 'csharp' target in '{projectFilePath}'.");
+        var csharpTarget = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "csharp");
 
         CSharpBuildIntegration.Write(projectDirectory, new CSharpTargetOptions(csharpTarget.OutputRoot));
     }

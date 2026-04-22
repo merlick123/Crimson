@@ -1,0 +1,3 @@
+[env]
+CRIMSON_COMMAND = "dotnet"
+CRIMSON_COMMAND_ARGUMENTS = "run --project ../../src/Crimson.Cli/Crimson.Cli.csproj --"

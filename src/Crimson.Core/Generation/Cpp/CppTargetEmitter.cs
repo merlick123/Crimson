@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Crimson.Core.Model;
+using Crimson.Core.Utility;
 
 namespace Crimson.Core.Generation.Cpp;
 
@@ -53,16 +54,13 @@ public sealed class CppTargetEmitter : ITargetEmitter
 
     private static CppTargetOptions ResolveOptions(JsonElement configuration)
     {
-        var outputRoot = configuration.ValueKind == JsonValueKind.Object && configuration.TryGetProperty("output", out var outputElement)
-            ? outputElement.GetString()
-            : null;
-        var interfaceHandleStyle = configuration.ValueKind == JsonValueKind.Object &&
-                                   configuration.TryGetProperty("interfaceHandleStyle", out var interfaceHandleStyleElement) &&
-                                   interfaceHandleStyleElement.GetString() is { Length: > 0 } handleStyleText
+        var interfaceHandleStyle = JsonConfigurationHelpers.GetOptionalString(configuration, "interfaceHandleStyle") is { Length: > 0 } handleStyleText
             ? ParseInterfaceHandleStyle(handleStyleText)
             : CppTargetOptions.Default.InterfaceHandleStyle;
 
-        return new CppTargetOptions(outputRoot ?? CppTargetOptions.Default.OutputRoot, interfaceHandleStyle);
+        return new CppTargetOptions(
+            JsonConfigurationHelpers.ResolveOutputRoot(configuration, CppTargetOptions.Default.OutputRoot),
+            interfaceHandleStyle);
     }
 
     private static CppInterfaceHandleStyle ParseInterfaceHandleStyle(string value) =>

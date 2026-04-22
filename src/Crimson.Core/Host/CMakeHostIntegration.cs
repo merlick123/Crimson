@@ -17,24 +17,12 @@ public sealed class CMakeHostIntegration : IHostIntegration
 
     public void ValidateHost(string projectFilePath, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
     {
-        var cppTargets = targets
-            .Where(static target => string.Equals(target.TargetName, "cpp", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-
-        if (cppTargets.Length == 0)
-        {
-            throw new InvalidOperationException($"Host integration '{HostName}' requires a 'cpp' target in '{projectFilePath}'.");
-        }
-
-        if (cppTargets.Length > 1)
-        {
-            throw new InvalidOperationException($"Host integration '{HostName}' currently supports a single 'cpp' target in '{projectFilePath}'.");
-        }
+        _ = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "cpp");
     }
 
     public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
     {
-        var cppTarget = targets.Single(static target => string.Equals(target.TargetName, "cpp", StringComparison.OrdinalIgnoreCase));
+        var cppTarget = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "cpp");
         var cmakeRoot = Path.Combine(projectDirectory, ".crimson", "cmake");
         Directory.CreateDirectory(cmakeRoot);
         File.WriteAllText(

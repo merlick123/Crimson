@@ -12,6 +12,7 @@ public sealed class CppCMakeGccProjectInitProfile : IProjectInitProfile
     {
         var files = new List<ProjectInitFile>
         {
+            new("README.md", CppCMakeProjectInitProfile.RenderReadme(context.ProjectName, "cpp-cmake-gcc", "cmake --preset gcc-debug", "cmake --build --preset gcc-debug", "The preset is wired for GCC and the generated CMake module runs `crimson build` automatically.")),
             new("CMakeLists.txt", CppCMakeProjectInitProfile.RenderCMakeLists(context.ProjectName)),
             new("CMakePresets.json", CMakePresets),
             new(Path.Combine("app", "main.cpp"), context.Starter ? CppCMakeProjectInitProfile.StarterMain : CppCMakeProjectInitProfile.DefaultMain),

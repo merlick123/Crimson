@@ -12,6 +12,7 @@ public sealed class CSharpProjectInitProfile : IProjectInitProfile
     {
         var files = new List<ProjectInitFile>
         {
+            new("README.md", RenderReadme(context.ProjectName)),
             new(Path.Combine("app", $"{context.ProjectName}.App.csproj"), RenderAppProject(context.ProjectName)),
             new(Path.Combine("app", "Program.cs"), context.Starter ? StarterProgram : DefaultProgram),
         };
@@ -28,6 +29,36 @@ public sealed class CSharpProjectInitProfile : IProjectInitProfile
             new ProjectInitHost("dotnet-msbuild", new { projectDirectories = new[] { "app" } }),
             files);
     }
+
+    private static string RenderReadme(string projectName) => $$"""
+# {{projectName}}
+
+This project uses the `csharp` Crimson init profile.
+
+Run it from this directory:
+
+```bash
+dotnet run --project app/{{projectName}}.App.csproj
+```
+
+The consuming app runs `crimson build` automatically before compile.
+
+Override the Crimson command if you are using a local repo build:
+
+```bash
+dotnet run --project app/{{projectName}}.App.csproj \
+  -p:CrimsonCommand=dotnet \
+  -p:CrimsonCommandArguments="run --project /path/to/src/Crimson.Cli/Crimson.Cli.csproj --"
+```
+
+Project layout:
+
+- `contracts/`: Crimson IDL contracts
+- `src/Generated/`: Crimson-generated C# output
+- `src/User/`: merge-protected user implementation stubs
+- `app/`: consuming .NET application
+- `.crimson/msbuild/`: tool-owned MSBuild integration files
+""";
 
     private static string RenderAppProject(string projectName) => $$"""
 <Project Sdk="Microsoft.NET.Sdk">

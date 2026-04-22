@@ -10,6 +10,7 @@ public sealed record GeneratedRustTargetTree(
 
 public sealed class RustEmitter
 {
+    private CompilationSetModel _compilation = null!;
     private GenerationModelNavigator _model = null!;
     private RustTargetOptions _options = RustTargetOptions.Default;
 
@@ -52,6 +53,7 @@ public sealed class RustEmitter
 
     public GeneratedRustTargetTree Emit(CompilationSetModel compilation, RustTargetOptions options)
     {
+        _compilation = compilation;
         _model = new GenerationModelNavigator(compilation);
         _options = options;
 
@@ -195,10 +197,25 @@ public sealed class RustEmitter
                     break;
 
                 case MethodMemberDeclaration methodMember:
-                    builder.AppendLine($"    fn {methodMember.Name}(&mut self{RenderParameters(methodMember.Parameters, declaration)}{RenderReturnType(methodMember.ReturnType, declaration)});");
+                    builder.AppendLine($"    fn {methodMember.Name}(&mut self{RenderParameters(methodMember.Parameters, declaration)}{RenderReturnType(methodMember.ReturnType, declaration)};");
                     builder.AppendLine();
                     break;
             }
+        }
+
+        var refinements = GetInterfaceRefinements(declaration).ToArray();
+        foreach (var refinement in refinements)
+        {
+            builder.AppendLine($"    fn as_{GetRefinementHelperName(refinement)}(&self) -> Option<&dyn {RenderTraitPath(refinement)}>");
+            builder.AppendLine("    {");
+            builder.AppendLine("        None");
+            builder.AppendLine("    }");
+            builder.AppendLine();
+            builder.AppendLine($"    fn as_{GetRefinementHelperName(refinement)}_mut(&mut self) -> Option<&mut dyn {RenderTraitPath(refinement)}>");
+            builder.AppendLine("    {");
+            builder.AppendLine("        None");
+            builder.AppendLine("    }");
+            builder.AppendLine();
         }
 
         builder.AppendLine("}");
@@ -210,7 +227,7 @@ public sealed class RustEmitter
         var builder = new StringBuilder();
         var effectiveValues = _model.GetEffectiveMembers(declaration).OfType<ValueMemberDeclaration>().ToArray();
 
-        builder.AppendLine("#[derive(Clone, Debug)]");
+        builder.AppendLine("#[derive(Clone)]");
         builder.AppendLine($"pub struct {GetGeneratedStateName(declaration)}");
         builder.AppendLine("{");
 
@@ -259,14 +276,11 @@ public sealed class RustEmitter
             builder.AppendLine($"        self.{valueMember.Name}.clone()");
             builder.AppendLine("    }");
 
-            if (!valueMember.IsReadonly || valueMember.IsInternal)
-            {
-                builder.AppendLine();
-                builder.AppendLine($"    pub fn set_{valueMember.Name}(&mut self, value: {RenderType(valueMember.Type, declaration)})");
-                builder.AppendLine("    {");
-                builder.AppendLine($"        self.{valueMember.Name} = value;");
-                builder.AppendLine("    }");
-            }
+            builder.AppendLine();
+            builder.AppendLine($"    pub fn set_{valueMember.Name}(&mut self, value: {RenderType(valueMember.Type, declaration)})");
+            builder.AppendLine("    {");
+            builder.AppendLine($"        self.{valueMember.Name} = value;");
+            builder.AppendLine("    }");
         }
 
         builder.AppendLine("}");
@@ -278,7 +292,7 @@ public sealed class RustEmitter
         var builder = new StringBuilder();
         AppendModuleHeader(builder);
 
-        builder.AppendLine("#[derive(Clone, Debug, Default)]");
+        builder.AppendLine("#[derive(Clone, Default)]");
         builder.AppendLine($"pub struct {declaration.Name}");
         builder.AppendLine("{");
         builder.AppendLine($"    generated: {RenderGeneratedStatePath(declaration)},");
@@ -323,14 +337,28 @@ public sealed class RustEmitter
                         builder.AppendLine();
                         break;
 
-                    case MethodMemberDeclaration methodMember:
-                        builder.AppendLine($"    fn {methodMember.Name}(&mut self{RenderParameters(methodMember.Parameters, declaration)}{RenderReturnType(methodMember.ReturnType, declaration)})");
-                        builder.AppendLine("    {");
-                        builder.AppendLine($"        unimplemented!(\"{contract.QualifiedName}.{methodMember.Name}\");");
-                        builder.AppendLine("    }");
-                        builder.AppendLine();
-                        break;
+                case MethodMemberDeclaration methodMember:
+                    builder.AppendLine($"    fn {methodMember.Name}(&mut self{RenderParameters(methodMember.Parameters, declaration)}{RenderReturnType(methodMember.ReturnType, declaration)}");
+                    builder.AppendLine("    {");
+                    builder.AppendLine($"        unimplemented!(\"{contract.QualifiedName}.{methodMember.Name}\");");
+                    builder.AppendLine("    }");
+                    builder.AppendLine();
+                    break;
                 }
+            }
+
+            foreach (var refinement in GetImplementedRefinements(contract, declaration))
+            {
+                builder.AppendLine($"    fn as_{GetRefinementHelperName(refinement)}(&self) -> Option<&dyn {RenderTraitPath(refinement)}>");
+                builder.AppendLine("    {");
+                builder.AppendLine("        Some(self)");
+                builder.AppendLine("    }");
+                builder.AppendLine();
+                builder.AppendLine($"    fn as_{GetRefinementHelperName(refinement)}_mut(&mut self) -> Option<&mut dyn {RenderTraitPath(refinement)}>");
+                builder.AppendLine("    {");
+                builder.AppendLine("        Some(self)");
+                builder.AppendLine("    }");
+                builder.AppendLine();
             }
 
             builder.AppendLine("}");
@@ -440,17 +468,25 @@ public sealed class RustEmitter
         {
             builder.AppendLine("extern crate alloc;");
             builder.AppendLine();
+            builder.AppendLine("use alloc::boxed::Box;");
             builder.AppendLine("use alloc::collections::BTreeMap;");
+            builder.AppendLine("use alloc::rc::Rc;");
             builder.AppendLine("use alloc::string::String as AllocString;");
-            builder.AppendLine("use alloc::sync::Arc;");
             builder.AppendLine("use alloc::vec::Vec;");
         }
         else
         {
+            builder.AppendLine("use core::cell::RefCell;");
+            builder.AppendLine("use std::boxed::Box;");
             builder.AppendLine("use std::collections::BTreeMap;");
+            builder.AppendLine("use std::rc::Rc;");
             builder.AppendLine("use std::string::String as StdString;");
-            builder.AppendLine("use std::sync::Arc;");
             builder.AppendLine("use std::vec::Vec;");
+        }
+
+        if (_options.Support.Profile == RustSupportProfile.NoStd)
+        {
+            builder.AppendLine("use core::cell::RefCell;");
         }
 
         builder.AppendLine();
@@ -460,7 +496,7 @@ public sealed class RustEmitter
         builder.AppendLine("pub type Optional<T> = core::option::Option<T>;");
         builder.AppendLine("pub type List<T> = Vec<T>;");
         builder.AppendLine("pub type Map<K, V> = BTreeMap<K, V>;");
-        builder.AppendLine("pub type InterfaceHandle<T> = core::option::Option<Arc<T>>;");
+        builder.AppendLine("pub type InterfaceHandle<T> = core::option::Option<Rc<RefCell<Box<T>>>>;");
         builder.AppendLine();
         builder.AppendLine("#[derive(Clone, Debug, Default, PartialEq, Eq)]");
         builder.AppendLine("pub struct Set<T>(pub Vec<T>);");
@@ -471,6 +507,66 @@ public sealed class RustEmitter
         builder.AppendLine("    {");
         builder.AppendLine("        Self(Vec::new())");
         builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    pub fn from_items(items: Vec<T>) -> Self");
+        builder.AppendLine("    {");
+        builder.AppendLine("        Self(items)");
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+        builder.AppendLine();
+        builder.AppendLine("impl<T> From<Vec<T>> for Set<T>");
+        builder.AppendLine("{");
+        builder.AppendLine("    fn from(value: Vec<T>) -> Self");
+        builder.AppendLine("    {");
+        builder.AppendLine("        Self(value)");
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+        builder.AppendLine();
+        builder.AppendLine("impl<T> Set<T>");
+        builder.AppendLine("{");
+        builder.AppendLine("    pub fn iter(&self) -> core::slice::Iter<'_, T>");
+        builder.AppendLine("    {");
+        builder.AppendLine("        self.0.iter()");
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+        builder.AppendLine();
+        builder.AppendLine("impl<T: PartialEq> Set<T>");
+        builder.AppendLine("{");
+        builder.AppendLine("    pub fn contains(&self, value: &T) -> bool");
+        builder.AppendLine("    {");
+        builder.AppendLine("        self.0.contains(value)");
+        builder.AppendLine("    }");
+        builder.AppendLine();
+        builder.AppendLine("    pub fn insert(&mut self, value: T)");
+        builder.AppendLine("    {");
+        builder.AppendLine("        if !self.contains(&value)");
+        builder.AppendLine("        {");
+        builder.AppendLine("            self.0.push(value);");
+        builder.AppendLine("        }");
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+        builder.AppendLine();
+        builder.AppendLine("pub fn interface_handle<T: ?Sized>(value: Box<T>) -> InterfaceHandle<T>");
+        builder.AppendLine("{");
+        builder.AppendLine("    Some(Rc::new(RefCell::new(value)))");
+        builder.AppendLine("}");
+        builder.AppendLine();
+        builder.AppendLine("pub fn with_interface<T: ?Sized, TResult>(handle: &InterfaceHandle<T>, f: impl FnOnce(&T) -> TResult) -> Option<TResult>");
+        builder.AppendLine("{");
+        builder.AppendLine("    handle.as_ref().map(|value|");
+        builder.AppendLine("    {");
+        builder.AppendLine("        let borrowed = value.borrow();");
+        builder.AppendLine("        f(&**borrowed)");
+        builder.AppendLine("    })");
+        builder.AppendLine("}");
+        builder.AppendLine();
+        builder.AppendLine("pub fn with_interface_mut<T: ?Sized, TResult>(handle: &InterfaceHandle<T>, f: impl FnOnce(&mut T) -> TResult) -> Option<TResult>");
+        builder.AppendLine("{");
+        builder.AppendLine("    handle.as_ref().map(|value|");
+        builder.AppendLine("    {");
+        builder.AppendLine("        let mut borrowed = value.borrow_mut();");
+        builder.AppendLine("        f(&mut **borrowed)");
+        builder.AppendLine("    })");
         builder.AppendLine("}");
 
         return builder.ToString().TrimEnd() + Environment.NewLine;
@@ -494,7 +590,7 @@ public sealed class RustEmitter
     }
 
     private string RenderParameters(IEnumerable<MethodParameter> parameters, Declaration scope) =>
-        string.Concat(parameters.Select(parameter => $", {parameter.Name}: {RenderType(parameter.Type, scope)}"));
+        string.Concat(parameters.Select(parameter => $", {parameter.Name}: {RenderType(parameter.Type, scope)}")) + ")";
 
     private string RenderReturnType(TypeReference type, Declaration scope) =>
         type is VoidTypeReference ? string.Empty : $" -> {RenderType(type, scope)}";
@@ -564,7 +660,7 @@ public sealed class RustEmitter
     private string RenderValueExpression(ValueExpression expression, TypeReference declaredType, Declaration scope) =>
         expression switch
         {
-            LiteralValueExpression literalExpression => RenderLiteral(literalExpression.Value),
+            LiteralValueExpression literalExpression => RenderLiteral(literalExpression.Value, declaredType),
             NamedValueExpression namedValue => RenderNamedValueExpression(namedValue, declaredType, scope),
             _ => throw new NotSupportedException($"Unsupported value expression: {expression.GetType().Name}"),
         };
@@ -589,9 +685,10 @@ public sealed class RustEmitter
         return string.Join("::", namedValue.Segments);
     }
 
-    private string RenderLiteral(LiteralValue literal) =>
+    private string RenderLiteral(LiteralValue literal, TypeReference declaredType) =>
         literal switch
         {
+            IntegerLiteralValue integer when IsFloatPrimitive(declaredType) => integer.Value.ToString(CultureInfo.InvariantCulture) + ".0",
             IntegerLiteralValue integer => integer.Value.ToString(CultureInfo.InvariantCulture),
             FloatLiteralValue floating => floating.Value.ToString(CultureInfo.InvariantCulture),
             StringLiteralValue text => $"{SupportModulePath}::String::from(\"{text.Value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\")",
@@ -602,6 +699,7 @@ public sealed class RustEmitter
     private static string RenderConstantLiteral(LiteralValue literal, TypeReference declaredType) =>
         literal switch
         {
+            IntegerLiteralValue integer when IsFloatPrimitive(declaredType) => integer.Value.ToString(CultureInfo.InvariantCulture) + ".0",
             StringLiteralValue text when declaredType is PrimitiveTypeReference { Name: "string" } =>
                 $"\"{text.Value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
             IntegerLiteralValue integer => integer.Value.ToString(CultureInfo.InvariantCulture),
@@ -699,6 +797,35 @@ public sealed class RustEmitter
         _options.Support.Provider == RustSupportProvider.Generated
             ? "crate::generated::crimson_support"
             : _options.Support.ModulePath;
+
+    private IEnumerable<InterfaceDeclaration> GetInterfaceRefinements(InterfaceDeclaration declaration) =>
+        GenerationModelNavigator.EnumerateDeclarations(_compilation.Files.SelectMany(static file => file.Declarations))
+            .OfType<InterfaceDeclaration>()
+            .Where(candidate =>
+                !string.Equals(candidate.QualifiedName, declaration.QualifiedName, StringComparison.Ordinal) &&
+                IsDescendantInterface(candidate, declaration))
+            .OrderBy(GetModuleName, StringComparer.Ordinal);
+
+    private IEnumerable<InterfaceDeclaration> GetImplementedRefinements(InterfaceDeclaration contract, InterfaceDeclaration concreteDeclaration)
+    {
+        var implementedContracts = _model.GetAllBaseInterfaces(concreteDeclaration)
+            .Concat([concreteDeclaration])
+            .Select(static declaration => declaration.QualifiedName)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return GetInterfaceRefinements(contract)
+            .Where(refinement => implementedContracts.Contains(refinement.QualifiedName));
+    }
+
+    private bool IsDescendantInterface(InterfaceDeclaration candidate, InterfaceDeclaration declaration) =>
+        _model.GetAllBaseInterfaces(candidate)
+            .Any(baseInterface => string.Equals(baseInterface.QualifiedName, declaration.QualifiedName, StringComparison.Ordinal));
+
+    private static bool IsFloatPrimitive(TypeReference declaredType) =>
+        declaredType is PrimitiveTypeReference { Name: "float32" or "float64" };
+
+    private static string GetRefinementHelperName(InterfaceDeclaration declaration) =>
+        GetModuleName(declaration);
 
     private static string ToSnakeCase(string identifier)
     {

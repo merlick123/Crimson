@@ -182,10 +182,10 @@ public sealed class CppEmitter
                 if (baseContract is NamedTypeReference named &&
                     _model.ResolveNamedDeclaration(named, declaration) is InterfaceDeclaration baseInterface)
                 {
-                    return $"public {RenderResolvedTypeName(baseInterface, declaration, $"I{baseInterface.Name}")}";
+                    return $"public virtual {RenderResolvedTypeName(baseInterface, declaration, $"I{baseInterface.Name}")}";
                 }
 
-                return $"public {RenderContractType(baseContract, declaration)}";
+                return $"public virtual {RenderContractType(baseContract, declaration)}";
             }));
 
         builder.AppendLine($"class I{declaration.Name}{baseNames}");
@@ -259,12 +259,17 @@ public sealed class CppEmitter
             builder.AppendLine();
         }
 
-        if (effectiveValues.Any(static member => member.IsInternal))
+        var protectedValues = effectiveValues.Where(static member => member.IsReadonly || member.IsInternal).ToArray();
+        if (protectedValues.Length > 0)
         {
             builder.AppendLine("protected:");
-            foreach (var valueMember in effectiveValues.Where(static member => member.IsInternal))
+            foreach (var valueMember in protectedValues)
             {
-                builder.AppendLine($"    {RenderContractType(valueMember.Type, declaration)} Get{ToPascalCase(valueMember.Name)}() const;");
+                if (valueMember.IsInternal)
+                {
+                    builder.AppendLine($"    {RenderContractType(valueMember.Type, declaration)} Get{ToPascalCase(valueMember.Name)}() const;");
+                }
+
                 builder.AppendLine($"    void Set{ToPascalCase(valueMember.Name)}({RenderContractType(valueMember.Type, declaration)} value);");
                 builder.AppendLine();
             }
@@ -302,14 +307,11 @@ public sealed class CppEmitter
             builder.AppendLine("}");
             builder.AppendLine();
 
-            if (!valueMember.IsReadonly || valueMember.IsInternal)
-            {
-                builder.AppendLine($"void {declaration.Name}Generated::Set{ToPascalCase(valueMember.Name)}({RenderContractType(valueMember.Type, declaration)} value)");
-                builder.AppendLine("{");
-                builder.AppendLine($"    {ToCamelCase(valueMember.Name)}_ = value;");
-                builder.AppendLine("}");
-                builder.AppendLine();
-            }
+            builder.AppendLine($"void {declaration.Name}Generated::Set{ToPascalCase(valueMember.Name)}({RenderContractType(valueMember.Type, declaration)} value)");
+            builder.AppendLine("{");
+            builder.AppendLine($"    {ToCamelCase(valueMember.Name)}_ = value;");
+            builder.AppendLine("}");
+            builder.AppendLine();
         }
 
         AppendNamespaceClose(builder, declaration.NamespacePath);

@@ -15,13 +15,14 @@ Run("Init creates gitignore entries", InitCreatesGitIgnoreEntries);
 Run("Cpp init writes reusable CMake integration", CppInitWritesCMakeIntegration);
 Run("Cpp CMake GCC starter app builds and runs", CppCMakeGccStarterAppBuildsAndRuns);
 Run("Cpp CMake cross init writes generic toolchain scaffold", CppCMakeCrossInitWritesToolchainScaffold);
+Run("Shared SmartHome C++ example builds and runs", SharedSmartHomeCppExampleBuildsAndRuns);
 Run("Rust Cargo init writes reusable build integration", RustCargoInitWritesBuildIntegration);
 Run("Rust Cargo starter app builds and runs", RustCargoStarterAppBuildsAndRuns);
 Run("Rust Cargo no_std init writes library scaffold", RustCargoNoStdInitWritesLibraryScaffold);
 Run("Init target name resolves to project file path", InitTargetNameResolvesToProjectFilePath);
 Run("CLI init requires explicit profile", CliInitRequiresExplicitProfile);
 Run("CLI init profiles list built in profiles", CliInitProfilesListBuiltInProfiles);
-Run("Rust example app runs from repo root without crimson on PATH", RustExampleRunsFromRepoRootWithoutCrimsonOnPath);
+Run("Shared SmartHome Rust example runs from repo root without crimson on PATH", SharedSmartHomeRustExampleRunsFromRepoRootWithoutCrimsonOnPath);
 return failures.Count == 0 ? 0 : 1;
 
 void Run(string name, Action body)
@@ -156,6 +157,11 @@ void InitWritesMsBuildIntegration()
     {
         throw new InvalidOperationException("MSBuild targets file was not created.");
     }
+
+    if (!File.Exists(Path.Combine(root, "README.md")))
+    {
+        throw new InvalidOperationException("Scaffold README was not created.");
+    }
 }
 
 void CSharpStarterAppScaffoldBuildsAndRuns()
@@ -233,6 +239,11 @@ void CppInitWritesCMakeIntegration()
         throw new InvalidOperationException("CMakeLists.txt was not created.");
     }
 
+    if (!File.Exists(Path.Combine(root, "README.md")))
+    {
+        throw new InvalidOperationException("Scaffold README was not created.");
+    }
+
     var gitIgnore = File.ReadAllText(Path.Combine(root, ".gitignore"));
     AssertContains("build/", gitIgnore);
 }
@@ -303,6 +314,55 @@ void CppCMakeCrossInitWritesToolchainScaffold()
 
     AssertContains("cross-debug", File.ReadAllText(presets));
     AssertContains("CMAKE_TOOLCHAIN_FILE", File.ReadAllText(presets));
+}
+
+void SharedSmartHomeCppExampleBuildsAndRuns()
+{
+    if (!CommandExists("cmake"))
+    {
+        Console.WriteLine("SKIP Shared SmartHome C++ example builds and runs (cmake not installed)");
+        return;
+    }
+
+    var repoRoot = ResolveRepoRoot();
+    var tempRoot = Path.Combine(Path.GetTempPath(), $"crimson-cpp-example-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(tempRoot);
+
+    var sourceRoot = Path.Combine(repoRoot, "examples", "SmartHomeDemo");
+    var exampleRoot = Path.Combine(tempRoot, "SmartHomeDemo");
+    CopyDirectory(sourceRoot, exampleRoot);
+
+    var cliProjectPath = Path.Combine(repoRoot, "src", "Crimson.Cli", "Crimson.Cli.csproj");
+    var configure = new ExecResult(
+        "cmake",
+        [
+            "--preset", "gcc-debug",
+            "-DCrimsonCommand=dotnet",
+            $"-DCrimsonCommandArguments=run --project {cliProjectPath} --",
+        ],
+        exampleRoot).Run();
+
+    if (configure.ExitCode != 0)
+    {
+        throw new InvalidOperationException($"Expected example cmake configure to succeed.{Environment.NewLine}{configure.Output}");
+    }
+
+    var build = new ExecResult("cmake", ["--build", "--preset", "gcc-debug"], exampleRoot).Run();
+    if (build.ExitCode != 0)
+    {
+        throw new InvalidOperationException($"Expected example cmake build to succeed.{Environment.NewLine}{build.Output}");
+    }
+
+    var binaryPath = Path.Combine(exampleRoot, "build", "gcc-debug", "SmartHomeCppApp");
+    var run = new ExecResult(binaryPath, Array.Empty<string>(), exampleRoot).Run();
+    if (run.ExitCode != 0)
+    {
+        throw new InvalidOperationException($"Expected built cpp example to run successfully.{Environment.NewLine}{run.Output}");
+    }
+
+    AssertContains("Home: Willow Lane", run.Output);
+    AssertContains("Automation chain from porch.eufy:", run.Output);
+    AssertContains("Scene after apply: Evening Arrival", run.Output);
 }
 
 void RustCargoInitWritesBuildIntegration()
@@ -514,18 +574,18 @@ void ExampleAppRunsFromRepoRootWithoutCrimsonOnPath()
     AssertContains("Home: Willow Lane", result.Output);
 }
 
-void RustExampleRunsFromRepoRootWithoutCrimsonOnPath()
+void SharedSmartHomeRustExampleRunsFromRepoRootWithoutCrimsonOnPath()
 {
     if (!CommandExists("cargo"))
     {
-        Console.WriteLine("SKIP Rust example app runs from repo root without crimson on PATH (cargo not installed)");
+        Console.WriteLine("SKIP Shared SmartHome Rust example runs from repo root without crimson on PATH (cargo not installed)");
         return;
     }
 
     var repoRoot = ResolveRepoRoot();
     var result = new ExecResult(
         "cargo",
-        ["run", "--manifest-path", Path.Combine(repoRoot, "examples", "RustDeviceDemo", "Cargo.toml")],
+        ["run", "--manifest-path", Path.Combine(repoRoot, "examples", "SmartHomeDemo", "Cargo.toml")],
         repoRoot).Run();
 
     if (result.ExitCode != 0)
@@ -533,7 +593,9 @@ void RustExampleRunsFromRepoRootWithoutCrimsonOnPath()
         throw new InvalidOperationException($"Expected rust example app to run successfully.{Environment.NewLine}{result.Output}");
     }
 
-    AssertContains("Porch Light: 42%", result.Output);
+    AssertContains("Home: Willow Lane", result.Output);
+    AssertContains("Automation chain from porch.eufy:", result.Output);
+    AssertContains("Scene after apply: Evening Arrival", result.Output);
 }
 
 void InitTargetNameResolvesToProjectFilePath()
@@ -599,6 +661,21 @@ void AssertContains(string expectedSubstring, string actual)
 
 static string ResolveRepoRoot() =>
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
+
+static void CopyDirectory(string sourceRoot, string destinationRoot)
+{
+    foreach (var directory in Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories))
+    {
+        Directory.CreateDirectory(Path.Combine(destinationRoot, Path.GetRelativePath(sourceRoot, directory)));
+    }
+
+    foreach (var file in Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories))
+    {
+        var destination = Path.Combine(destinationRoot, Path.GetRelativePath(sourceRoot, file));
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        File.Copy(file, destination, overwrite: true);
+    }
+}
 
 static bool CommandExists(string command)
 {

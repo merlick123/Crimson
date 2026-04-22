@@ -1,0 +1,5 @@
+.merge/previous/
+.merge/current/
+.merge/backup/
+build/
+target/

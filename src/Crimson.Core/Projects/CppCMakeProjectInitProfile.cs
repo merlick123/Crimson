@@ -12,6 +12,7 @@ public sealed class CppCMakeProjectInitProfile : IProjectInitProfile
     {
         var files = new List<ProjectInitFile>
         {
+            new("README.md", RenderReadme(context.ProjectName, "cpp-cmake", "cmake -S . -B build", "cmake --build build", "The generated CMake module runs `crimson build` automatically during configure and build.")),
             new("CMakeLists.txt", RenderCMakeLists(context.ProjectName)),
             new(Path.Combine("app", "main.cpp"), context.Starter ? StarterMain : DefaultMain),
         };
@@ -28,6 +29,43 @@ public sealed class CppCMakeProjectInitProfile : IProjectInitProfile
             new ProjectInitHost("cmake", new { buildDirectory = "build" }),
             files);
     }
+
+    internal static string RenderReadme(
+        string projectName,
+        string profileId,
+        string configureCommand,
+        string buildCommand,
+        string workflowNote) => $$"""
+# {{projectName}}
+
+This project uses Crimson with the `{{profileId}}` init profile.
+
+Configure and build it from this directory:
+
+```bash
+{{configureCommand}}
+{{buildCommand}}
+```
+
+{{workflowNote}}
+
+Override the Crimson command if you are using a local repo build:
+
+```bash
+{{configureCommand}} \
+  -DCrimsonCommand=dotnet \
+  -DCrimsonCommandArguments="run --project /path/to/src/Crimson.Cli/Crimson.Cli.csproj --"
+{{buildCommand}}
+```
+
+Project layout:
+
+- `contracts/`: Crimson IDL contracts
+- `cpp/generated/`: Crimson-generated C++ headers and sources
+- `cpp/user/`: merge-protected user implementation stubs
+- `app/`: consuming C++ entry point
+- `.crimson/cmake/Crimson.Cpp.cmake`: tool-owned CMake integration helper
+""";
 
     internal static string RenderCMakeLists(string projectName) => $$"""
 cmake_minimum_required(VERSION 3.20)

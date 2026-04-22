@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Crimson.Core.Model;
+using Crimson.Core.Utility;
 
 namespace Crimson.Core.Generation.Rust;
 
@@ -62,25 +63,16 @@ public sealed class RustTargetEmitter : ITargetEmitter
 
     private static RustTargetOptions ResolveOptions(JsonElement configuration)
     {
-        var outputRoot = configuration.ValueKind == JsonValueKind.Object && configuration.TryGetProperty("output", out var outputElement)
-            ? outputElement.GetString()
-            : null;
-
         var support = RustSupportOptions.StdDefault;
-        if (configuration.ValueKind == JsonValueKind.Object &&
-            configuration.TryGetProperty("support", out var supportElement) &&
-            supportElement.ValueKind == JsonValueKind.Object)
+        if (JsonConfigurationHelpers.GetOptionalObject(configuration, "support") is { } supportElement)
         {
-            var provider = supportElement.TryGetProperty("provider", out var providerElement) &&
-                           providerElement.GetString() is { Length: > 0 } providerText
+            var provider = JsonConfigurationHelpers.GetOptionalString(supportElement, "provider") is { Length: > 0 } providerText
                 ? ParseProvider(providerText)
                 : RustSupportOptions.StdDefault.Provider;
-            var profile = supportElement.TryGetProperty("profile", out var profileElement) &&
-                          profileElement.GetString() is { Length: > 0 } profileText
+            var profile = JsonConfigurationHelpers.GetOptionalString(supportElement, "profile") is { Length: > 0 } profileText
                 ? ParseProfile(profileText)
                 : RustSupportOptions.StdDefault.Profile;
-            var modulePath = supportElement.TryGetProperty("modulePath", out var modulePathElement) &&
-                             modulePathElement.GetString() is { Length: > 0 } configuredModulePath
+            var modulePath = JsonConfigurationHelpers.GetOptionalString(supportElement, "modulePath") is { Length: > 0 } configuredModulePath
                 ? configuredModulePath
                 : provider == RustSupportProvider.External
                     ? "crate::support"
@@ -89,7 +81,9 @@ public sealed class RustTargetEmitter : ITargetEmitter
             support = new RustSupportOptions(provider, profile, modulePath);
         }
 
-        return new RustTargetOptions(outputRoot ?? RustTargetOptions.Default.OutputRoot, support);
+        return new RustTargetOptions(
+            JsonConfigurationHelpers.ResolveOutputRoot(configuration, RustTargetOptions.Default.OutputRoot),
+            support);
     }
 
     private static RustSupportProvider ParseProvider(string value) =>

@@ -1,6 +1,6 @@
 # Crimson IDL Reference
 
-Crimson IDL describes contracts that lower into generated C# and C++ code.
+Crimson IDL describes contracts that lower into generated target-language code.
 
 ## Declarations
 
@@ -349,3 +349,4 @@ Common validation failures include:
 ## Current Limitations
 
 - the C++ target does not yet support enums with associated values
+- the Rust target currently supports only integer-backed enum associated values

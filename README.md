@@ -8,9 +8,9 @@ Current scope in this repository:
 - an ANTLR-based parser that lowers `.idl` into a typed semantic model
 - semantic validation and diagnostics
 - JSON AST export
-- built-in C# and C++ generators
+- built-in target-language generators
 - staged generation and conservative 3-way merge scaffolding
-- reusable MSBuild and CMake host integrations
+- reusable MSBuild, CMake, and Cargo host integrations
 - CLI commands for `init`, `parse`, `validate`, `generate`, `merge`, and `build`
 
 For the IDL syntax and semantics, see `docs/idl-reference.md`.
@@ -23,7 +23,7 @@ The current end-to-end workflows are working, but the full design space discusse
 
 - merge resolution is conservative and file-level
 - interactive external merge-tool support is not implemented yet
-- built-in target coverage is currently limited to C# and C++
+- built-in target coverage is still intentionally narrow
 - higher-level generation planning such as flavors and deployment-driven output selection is not implemented yet
 
 ## Repository Layout
@@ -59,16 +59,24 @@ crimson init-profiles
 
 The built-in profiles currently include `csharp`, `cpp-cmake`, `cpp-cmake-gcc`, `cpp-cmake-cross`, `rust-cargo`, and `rust-cargo-no-std`.
 
-Build the included example project:
+Build the included example projects:
 
 ```bash
 crimson build examples/SmartHomeDemo/SmartHome.crimsonproj
+crimson build examples/SmartHomeDemo/SmartHome.Cpp.crimsonproj
+crimson build examples/SmartHomeDemo/SmartHome.Rust.crimsonproj
 ```
 
-Run the included Rust example:
+Run the shared SmartHome frontends:
 
 ```bash
-cargo run --manifest-path examples/RustDeviceDemo/Cargo.toml
+dotnet run --project examples/SmartHomeDemo/app/SmartHomeDemo.App.csproj
+cmake --preset gcc-debug -S examples/SmartHomeDemo -B examples/SmartHomeDemo/build/gcc-debug \
+  -DCrimsonCommand=dotnet \
+  -DCrimsonCommandArguments="run --project $PWD/src/Crimson.Cli/Crimson.Cli.csproj --"
+cmake --build examples/SmartHomeDemo/build/gcc-debug
+./examples/SmartHomeDemo/build/gcc-debug/SmartHomeCppApp
+cargo run --manifest-path examples/SmartHomeDemo/Cargo.toml
 ```
 
 Validate a project:
@@ -211,21 +219,15 @@ curl -L -o tools/antlr-4.13.1-complete.jar https://www.antlr.org/download/antlr-
 
 ## Example
 
-Example projects are included in `examples/SmartHomeDemo` and `examples/RustDeviceDemo`.
+The main example project is `examples/SmartHomeDemo`.
 
 `examples/SmartHomeDemo` demonstrates:
 
-- generated C# interfaces and class plumbing
-- user-owned code under `src/User`
-- automatic Crimson-triggered regeneration from a consuming C# project
+- one shared contract tree lowered into multiple target-language frontends
+- generated and user-owned code under `src/`, `cpp/`, and `rust/src/`
+- automatic Crimson-triggered regeneration from consuming .NET, CMake, and Cargo frontends
 - capability-based swappability across vendor devices through `IDevice` and related interfaces
 - querying device features and tracing automation chains across the home
-
-`examples/RustDeviceDemo` demonstrates:
-
-- generated and user-owned Rust modules under `src/generated` and `src/user`
-- Cargo-triggered Crimson regeneration through a build script
-- a host-runnable Rust contract workflow using the new `rust` target
 
 ## Contributing
 

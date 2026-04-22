@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Crimson.Core.Model;
+using Crimson.Core.Utility;
 
 namespace Crimson.Core.Generation.CSharp;
 
@@ -40,12 +41,6 @@ public sealed class CSharpTargetEmitter : ITargetEmitter
         ];
     }
 
-    private static CSharpTargetOptions ResolveOptions(JsonElement configuration)
-    {
-        var outputRoot = configuration.ValueKind == JsonValueKind.Object && configuration.TryGetProperty("output", out var outputElement)
-            ? outputElement.GetString()
-            : null;
-
-        return new CSharpTargetOptions(outputRoot ?? CSharpTargetOptions.Default.OutputRoot);
-    }
+    private static CSharpTargetOptions ResolveOptions(JsonElement configuration) =>
+        new(JsonConfigurationHelpers.ResolveOutputRoot(configuration, CSharpTargetOptions.Default.OutputRoot));
 }

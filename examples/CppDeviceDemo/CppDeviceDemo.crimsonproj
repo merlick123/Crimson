@@ -1,0 +1,17 @@
+{
+  "sources": [
+    "contracts/**/*.idl"
+  ],
+  "excludes": [],
+  "targets": {
+    "cpp": {
+      "output": "cpp"
+    }
+  },
+  "host": {
+    "kind": "cmake",
+    "configuration": {
+      "buildDirectory": "build"
+    }
+  }
+}
