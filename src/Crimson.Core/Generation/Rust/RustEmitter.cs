@@ -690,7 +690,7 @@ public sealed class RustEmitter
         {
             IntegerLiteralValue integer when IsFloatPrimitive(declaredType) => integer.Value.ToString(CultureInfo.InvariantCulture) + ".0",
             IntegerLiteralValue integer => integer.Value.ToString(CultureInfo.InvariantCulture),
-            FloatLiteralValue floating => floating.Value.ToString(CultureInfo.InvariantCulture),
+            FloatLiteralValue floating => RenderFloatLiteral(floating.Value),
             StringLiteralValue text => $"{SupportModulePath}::String::from(\"{text.Value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\")",
             BooleanLiteralValue boolean => boolean.Value ? "true" : "false",
             _ => throw new NotSupportedException($"Unsupported literal: {literal.GetType().Name}"),
@@ -703,7 +703,7 @@ public sealed class RustEmitter
             StringLiteralValue text when declaredType is PrimitiveTypeReference { Name: "string" } =>
                 $"\"{text.Value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
             IntegerLiteralValue integer => integer.Value.ToString(CultureInfo.InvariantCulture),
-            FloatLiteralValue floating => floating.Value.ToString(CultureInfo.InvariantCulture),
+            FloatLiteralValue floating => RenderFloatLiteral(floating.Value),
             StringLiteralValue text => $"\"{text.Value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
             BooleanLiteralValue boolean => boolean.Value ? "true" : "false",
             _ => throw new NotSupportedException($"Unsupported constant literal: {literal.GetType().Name}"),
@@ -718,6 +718,7 @@ public sealed class RustEmitter
             PrimitiveTypeReference primitive when primitive.IsNullable => "None",
             PrimitiveTypeReference primitive when primitive.Name == "string" => $"{SupportModulePath}::String::new()",
             PrimitiveTypeReference primitive when primitive.Name == "bool" => "false",
+            PrimitiveTypeReference primitive when IsFloatPrimitive(primitive) => "0.0",
             PrimitiveTypeReference => "0",
             NamedTypeReference named when _model.ResolveNamedDeclaration(named, scope) is InterfaceDeclaration => "None",
             NamedTypeReference named when named.IsNullable => "None",
@@ -820,6 +821,14 @@ public sealed class RustEmitter
     private bool IsDescendantInterface(InterfaceDeclaration candidate, InterfaceDeclaration declaration) =>
         _model.GetAllBaseInterfaces(candidate)
             .Any(baseInterface => string.Equals(baseInterface.QualifiedName, declaration.QualifiedName, StringComparison.Ordinal));
+
+    private static string RenderFloatLiteral(double value)
+    {
+        var rendered = value.ToString("R", CultureInfo.InvariantCulture);
+        return rendered.IndexOfAny(['.', 'e', 'E']) >= 0
+            ? rendered
+            : rendered + ".0";
+    }
 
     private static bool IsFloatPrimitive(TypeReference declaredType) =>
         declaredType is PrimitiveTypeReference { Name: "float32" or "float64" };

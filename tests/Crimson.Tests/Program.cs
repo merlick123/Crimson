@@ -29,6 +29,9 @@ var tests = new (string Name, Action Body)[]
     ("Nullable types emit optional and shared_ptr Cpp", NullableTypesEmitNullableCpp),
     ("Nullable types emit optional and interface handles Rust", NullableTypesEmitNullableRust),
     ("Floating defaults resolve in generated Rust code", FloatingDefaultsResolveInGeneratedRustCode),
+    ("Implicit float defaults resolve in generated Rust code", ImplicitFloatDefaultsResolveInGeneratedRustCode),
+    ("Explicit float literals retain decimal point in generated Rust code", ExplicitFloatLiteralsRetainDecimalPointInGeneratedRustCode),
+    ("Float constants retain decimal point in generated Rust code", FloatConstantsRetainDecimalPointInGeneratedRustCode),
     ("Enum defaults resolve in generated code", EnumDefaultsResolveInGeneratedCode),
     ("Structs lower to concrete types", StructsLowerToConcreteTypes),
     ("Structs reject internal members", StructsRejectInternalMembers),
@@ -592,6 +595,83 @@ namespace SmartHome {
 
     var generatedRust = ReadGeneratedRust(project.Root, "Generated", "smart_home__thermostat.rs");
     Assert.Contains("target_temperature: 21.0,", generatedRust);
+}
+
+static void ImplicitFloatDefaultsResolveInGeneratedRustCode()
+{
+    var project = CreateTempProject("rust-cargo");
+    WriteContract(project.Root, "contracts/defaults.idl", """
+namespace SmartHome {
+    interface Thermostat {
+        float64 target_temperature;
+    }
+
+    struct ClimateSnapshot {
+        float32 ambient_temperature;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGeneratedRust(project.Root, "Generated", "smart_home__thermostat.rs");
+    Assert.Contains("target_temperature: 0.0,", generatedInterface);
+
+    var generatedStruct = ReadGeneratedRust(project.Root, "Generated", "smart_home__climate_snapshot.rs");
+    Assert.Contains("ambient_temperature: 0.0,", generatedStruct);
+}
+
+static void ExplicitFloatLiteralsRetainDecimalPointInGeneratedRustCode()
+{
+    var project = CreateTempProject("rust-cargo");
+    WriteContract(project.Root, "contracts/defaults.idl", """
+namespace SmartHome {
+    interface Thermostat {
+        float64 target_temperature = 21.0;
+    }
+
+    struct ClimateSnapshot {
+        float32 ambient_temperature = 24.0;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedInterface = ReadGeneratedRust(project.Root, "Generated", "smart_home__thermostat.rs");
+    Assert.Contains("target_temperature: 21.0,", generatedInterface);
+
+    var generatedStruct = ReadGeneratedRust(project.Root, "Generated", "smart_home__climate_snapshot.rs");
+    Assert.Contains("ambient_temperature: 24.0,", generatedStruct);
+}
+
+static void FloatConstantsRetainDecimalPointInGeneratedRustCode()
+{
+    var project = CreateTempProject("rust-cargo");
+    WriteContract(project.Root, "contracts/defaults.idl", """
+namespace SmartHome {
+    const float64 DefaultTargetTemperature = 21.0;
+
+    interface Limits {
+        const float32 AmbientTemperature = 24.0;
+    }
+
+    struct BakeProfile {
+        const float32 InitialSteamPercent = 80.0;
+    }
+}
+""");
+
+    project.Workspace.Generate(project.ProjectFile);
+
+    var generatedConstant = ReadGeneratedRust(project.Root, "Generated", "smart_home__default_target_temperature.rs");
+    Assert.Contains("pub const VALUE: f64 = 21.0;", generatedConstant);
+
+    var generatedInterface = ReadGeneratedRust(project.Root, "Generated", "smart_home__limits.rs");
+    Assert.Contains("const AMBIENTTEMPERATURE: f32 = 24.0;", generatedInterface);
+
+    var generatedStruct = ReadGeneratedRust(project.Root, "Generated", "smart_home__bake_profile.rs");
+    Assert.Contains("pub const INITIALSTEAMPERCENT: f32 = 80.0;", generatedStruct);
 }
 
 static void EnumDefaultsResolveInGeneratedCode()
