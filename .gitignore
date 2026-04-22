@@ -11,9 +11,6 @@
 **/.merge/previous/
 **/.merge/current/
 **/.merge/backup/
-**/.crimson/raw-previous/
-**/.crimson/raw-current/
-**/.crimson/merge-backup/
 
 # Generated example output
 examples/**/out/

@@ -84,7 +84,6 @@ public sealed class CrimsonWorkspace
     public void ValidateProject(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
-        MigrateLegacyMergeState(project);
         var compilation = ValidateFiles(project.ResolveSourceFiles());
         ValidateTargets(project, compilation);
     }
@@ -92,7 +91,6 @@ public sealed class CrimsonWorkspace
     public void Generate(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
-        MigrateLegacyMergeState(project);
         var model = ValidateFiles(project.ResolveSourceFiles());
         var targets = ResolveTargets(project).ToArray();
         ValidateTargets(project, model, targets);
@@ -124,7 +122,6 @@ public sealed class CrimsonWorkspace
     public MergeResult Merge(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
-        MigrateLegacyMergeState(project);
         var targets = ResolveTargets(project).ToArray();
         var stateRoot = project.MergeStateDirectory;
         var previousRoot = Path.Combine(stateRoot, "previous");
@@ -150,7 +147,6 @@ public sealed class CrimsonWorkspace
                 var projectRoot = Path.Combine(outputRoot, descriptor.RelativeOutputPath);
                 var backupRoot = Path.Combine(stateRoot, "backup", "targets", target.Emitter.TargetName, descriptor.Name);
 
-                MigrateLegacyOutputGroup(Path.Combine(previousRoot, descriptor.Name), stagedPreviousRoot);
                 Directory.CreateDirectory(stagedPreviousRoot);
                 Directory.CreateDirectory(stagedCurrentRoot);
 
@@ -272,69 +268,6 @@ namespace Demo.Contracts {
             .Where(static segment => !string.IsNullOrWhiteSpace(segment))
             .ToArray();
         return Utility.PathHelpers.NormalizeRelativePath(Path.Combine(segments));
-    }
-
-    private static void MigrateLegacyOutputGroup(string legacyRoot, string targetRoot)
-    {
-        if (!Directory.Exists(legacyRoot))
-        {
-            return;
-        }
-
-        if (Directory.Exists(targetRoot) &&
-            Directory.EnumerateFiles(targetRoot, "*", SearchOption.AllDirectories).Any())
-        {
-            return;
-        }
-
-        foreach (var directory in Directory.EnumerateDirectories(legacyRoot, "*", SearchOption.AllDirectories))
-        {
-            Directory.CreateDirectory(Path.Combine(targetRoot, Path.GetRelativePath(legacyRoot, directory)));
-        }
-
-        foreach (var file in Directory.EnumerateFiles(legacyRoot, "*", SearchOption.AllDirectories))
-        {
-            var destination = Path.Combine(targetRoot, Path.GetRelativePath(legacyRoot, file));
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(file, destination, overwrite: true);
-        }
-    }
-
-    private static void MigrateLegacyMergeState(CrimsonProjectFile project)
-    {
-        var legacyRoot = project.LegacyCrimsonStateDirectory;
-        var mergeRoot = project.MergeStateDirectory;
-
-        MigrateLegacyDirectory(Path.Combine(legacyRoot, "raw-previous"), Path.Combine(mergeRoot, "previous"));
-        MigrateLegacyDirectory(Path.Combine(legacyRoot, "raw-current"), Path.Combine(mergeRoot, "current"));
-        MigrateLegacyDirectory(Path.Combine(legacyRoot, "merge-backup"), Path.Combine(mergeRoot, "backup"));
-    }
-
-    private static void MigrateLegacyDirectory(string legacyRoot, string targetRoot)
-    {
-        if (!Directory.Exists(legacyRoot))
-        {
-            return;
-        }
-
-        if (Directory.Exists(targetRoot) &&
-            (Directory.EnumerateFiles(targetRoot, "*", SearchOption.AllDirectories).Any() ||
-             Directory.EnumerateDirectories(targetRoot, "*", SearchOption.AllDirectories).Any()))
-        {
-            return;
-        }
-
-        foreach (var directory in Directory.EnumerateDirectories(legacyRoot, "*", SearchOption.AllDirectories))
-        {
-            Directory.CreateDirectory(Path.Combine(targetRoot, Path.GetRelativePath(legacyRoot, directory)));
-        }
-
-        foreach (var file in Directory.EnumerateFiles(legacyRoot, "*", SearchOption.AllDirectories))
-        {
-            var destination = Path.Combine(targetRoot, Path.GetRelativePath(legacyRoot, file));
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(file, destination, overwrite: true);
-        }
     }
 
     private sealed record ConfiguredTarget(ITargetEmitter Emitter, JsonElement Configuration);
