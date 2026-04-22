@@ -65,9 +65,9 @@ public sealed class CrimsonWorkspace
 
         File.WriteAllText(fullPath, JsonSerializer.Serialize(project, JsonDefaults.Options));
         Directory.CreateDirectory(Path.Combine(directory, "contracts"));
-        Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-previous", "targets"));
-        Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-current", "targets"));
-        Directory.CreateDirectory(Path.Combine(directory, ".crimson", "merge-backup"));
+        Directory.CreateDirectory(Path.Combine(directory, ".merge", "previous", "targets"));
+        Directory.CreateDirectory(Path.Combine(directory, ".merge", "current", "targets"));
+        Directory.CreateDirectory(Path.Combine(directory, ".merge", "backup"));
         EnsureGitIgnore(directory);
 
         foreach (var (targetName, options) in defaultTargets)
@@ -84,6 +84,7 @@ public sealed class CrimsonWorkspace
     public void ValidateProject(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
+        MigrateLegacyMergeState(project);
         var compilation = ValidateFiles(project.ResolveSourceFiles());
         ValidateTargets(project, compilation);
     }
@@ -91,12 +92,13 @@ public sealed class CrimsonWorkspace
     public void Generate(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
+        MigrateLegacyMergeState(project);
         var model = ValidateFiles(project.ResolveSourceFiles());
         var targets = ResolveTargets(project).ToArray();
         ValidateTargets(project, model, targets);
 
-        var rawCurrentRoot = Path.Combine(project.CrimsonStateDirectory, "raw-current");
-        RecreateDirectory(rawCurrentRoot);
+        var currentRoot = Path.Combine(project.MergeStateDirectory, "current");
+        RecreateDirectory(currentRoot);
 
         foreach (var target in targets)
         {
@@ -105,7 +107,7 @@ public sealed class CrimsonWorkspace
             var descriptors = target.Emitter.DescribeOutputs(target.Configuration)
                 .ToDictionary(static descriptor => descriptor.Name, StringComparer.OrdinalIgnoreCase);
             var outputs = target.Emitter.Emit(model, target.Configuration);
-            var targetRoot = Path.Combine(rawCurrentRoot, "targets", target.Emitter.TargetName);
+            var targetRoot = Path.Combine(currentRoot, "targets", target.Emitter.TargetName);
 
             foreach (var output in outputs)
             {
@@ -122,14 +124,15 @@ public sealed class CrimsonWorkspace
     public MergeResult Merge(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
+        MigrateLegacyMergeState(project);
         var targets = ResolveTargets(project).ToArray();
-        var stateRoot = project.CrimsonStateDirectory;
-        var rawPrevious = Path.Combine(stateRoot, "raw-previous");
-        var rawCurrent = Path.Combine(stateRoot, "raw-current");
+        var stateRoot = project.MergeStateDirectory;
+        var previousRoot = Path.Combine(stateRoot, "previous");
+        var currentRoot = Path.Combine(stateRoot, "current");
 
-        Directory.CreateDirectory(rawPrevious);
-        Directory.CreateDirectory(rawCurrent);
-        Directory.CreateDirectory(Path.Combine(stateRoot, "merge-backup"));
+        Directory.CreateDirectory(previousRoot);
+        Directory.CreateDirectory(currentRoot);
+        Directory.CreateDirectory(Path.Combine(stateRoot, "backup"));
 
         var updated = new List<string>();
         var deleted = new List<string>();
@@ -142,21 +145,21 @@ public sealed class CrimsonWorkspace
 
             foreach (var descriptor in target.Emitter.DescribeOutputs(target.Configuration))
             {
-                var previousRoot = Path.Combine(rawPrevious, "targets", target.Emitter.TargetName, descriptor.Name);
-                var currentRoot = Path.Combine(rawCurrent, "targets", target.Emitter.TargetName, descriptor.Name);
+                var stagedPreviousRoot = Path.Combine(previousRoot, "targets", target.Emitter.TargetName, descriptor.Name);
+                var stagedCurrentRoot = Path.Combine(currentRoot, "targets", target.Emitter.TargetName, descriptor.Name);
                 var projectRoot = Path.Combine(outputRoot, descriptor.RelativeOutputPath);
-                var backupRoot = Path.Combine(stateRoot, "merge-backup", "targets", target.Emitter.TargetName, descriptor.Name);
+                var backupRoot = Path.Combine(stateRoot, "backup", "targets", target.Emitter.TargetName, descriptor.Name);
 
-                MigrateLegacyOutputGroup(Path.Combine(rawPrevious, descriptor.Name), previousRoot);
-                Directory.CreateDirectory(previousRoot);
-                Directory.CreateDirectory(currentRoot);
+                MigrateLegacyOutputGroup(Path.Combine(previousRoot, descriptor.Name), stagedPreviousRoot);
+                Directory.CreateDirectory(stagedPreviousRoot);
+                Directory.CreateDirectory(stagedCurrentRoot);
 
                 if (descriptor.MergeMode == TargetMergeMode.PreferGenerated)
                 {
-                    _mergeEngine.MirrorLocalTreeAsBase(projectRoot, previousRoot);
+                    _mergeEngine.MirrorLocalTreeAsBase(projectRoot, stagedPreviousRoot);
                 }
 
-                var result = _mergeEngine.Merge(previousRoot, projectRoot, currentRoot, backupRoot);
+                var result = _mergeEngine.Merge(stagedPreviousRoot, projectRoot, stagedCurrentRoot, backupRoot);
                 updated.AddRange(result.UpdatedFiles.Select(file => PrefixMergedPath(target, descriptor, file)));
                 deleted.AddRange(result.DeletedFiles.Select(file => PrefixMergedPath(target, descriptor, file)));
                 conflicts.AddRange(result.Conflicts.Select(conflict => new MergeConflict(
@@ -170,7 +173,7 @@ public sealed class CrimsonWorkspace
             return new MergeResult(updated, deleted, conflicts);
         }
 
-        _mergeEngine.ReplaceTree(rawCurrent, rawPrevious);
+        _mergeEngine.ReplaceTree(currentRoot, previousRoot);
         return new MergeResult(updated, deleted, conflicts);
     }
 
@@ -205,9 +208,9 @@ public sealed class CrimsonWorkspace
         var gitIgnorePath = Path.Combine(projectDirectory, ".gitignore");
         var requiredEntries = new[]
         {
-            ".crimson/raw-previous/",
-            ".crimson/raw-current/",
-            ".crimson/merge-backup/",
+            ".merge/previous/",
+            ".merge/current/",
+            ".merge/backup/",
         };
 
         if (!File.Exists(gitIgnorePath))
@@ -280,6 +283,43 @@ namespace Demo.Contracts {
 
         if (Directory.Exists(targetRoot) &&
             Directory.EnumerateFiles(targetRoot, "*", SearchOption.AllDirectories).Any())
+        {
+            return;
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(legacyRoot, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(targetRoot, Path.GetRelativePath(legacyRoot, directory)));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(legacyRoot, "*", SearchOption.AllDirectories))
+        {
+            var destination = Path.Combine(targetRoot, Path.GetRelativePath(legacyRoot, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(file, destination, overwrite: true);
+        }
+    }
+
+    private static void MigrateLegacyMergeState(CrimsonProjectFile project)
+    {
+        var legacyRoot = project.LegacyCrimsonStateDirectory;
+        var mergeRoot = project.MergeStateDirectory;
+
+        MigrateLegacyDirectory(Path.Combine(legacyRoot, "raw-previous"), Path.Combine(mergeRoot, "previous"));
+        MigrateLegacyDirectory(Path.Combine(legacyRoot, "raw-current"), Path.Combine(mergeRoot, "current"));
+        MigrateLegacyDirectory(Path.Combine(legacyRoot, "merge-backup"), Path.Combine(mergeRoot, "backup"));
+    }
+
+    private static void MigrateLegacyDirectory(string legacyRoot, string targetRoot)
+    {
+        if (!Directory.Exists(legacyRoot))
+        {
+            return;
+        }
+
+        if (Directory.Exists(targetRoot) &&
+            (Directory.EnumerateFiles(targetRoot, "*", SearchOption.AllDirectories).Any() ||
+             Directory.EnumerateDirectories(targetRoot, "*", SearchOption.AllDirectories).Any()))
         {
             return;
         }

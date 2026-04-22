@@ -82,5 +82,7 @@ public sealed class CrimsonProjectFile
         }
     }
 
-    public string CrimsonStateDirectory => Path.Combine(ProjectDirectory, ".crimson");
+    public string MergeStateDirectory => Path.Combine(ProjectDirectory, ".merge");
+
+    public string LegacyCrimsonStateDirectory => Path.Combine(ProjectDirectory, ".crimson");
 }

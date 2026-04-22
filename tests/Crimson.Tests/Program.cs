@@ -196,7 +196,7 @@ namespace SmartHome {
     workspace.ValidateProject(projectFile);
     workspace.Generate(projectFile);
 
-    var generatedInterface = Path.Combine(root, ".crimson", "raw-current", "targets", "csharp", "Generated", "SmartHome", "IDemoCamera.g.cs");
+    var generatedInterface = Path.Combine(root, ".merge", "current", "targets", "csharp", "Generated", "SmartHome", "IDemoCamera.g.cs");
     if (!File.Exists(generatedInterface))
     {
         throw new InvalidOperationException("Expected generated interface output for split namespace declarations.");
@@ -364,9 +364,9 @@ namespace Demo {
 
     project.Workspace.Generate(project.ProjectFile);
 
-    Assert.True(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "targets", "csharp", "Generated", "Demo", "IDevice.g.cs")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "targets", "csharp", "Generated", "Demo", "Device.g.cs")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "targets", "csharp", "User", "Demo", "Device.cs")));
+    Assert.True(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "csharp", "Generated", "Demo", "IDevice.g.cs")));
+    Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "csharp", "Generated", "Demo", "Device.g.cs")));
+    Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "csharp", "User", "Demo", "Device.cs")));
 }
 
 static void NestedTypeResolutionThroughBaseContractWorks()
@@ -510,8 +510,8 @@ namespace Demo {
     Assert.Equal(0, result.Conflicts.Count);
     Assert.True(File.Exists(Path.Combine(root, "notes-src", "Runtime", "summary.txt")));
     Assert.True(File.Exists(Path.Combine(root, "notes-src", "Hooks", "Notebook.hooks.txt")));
-    Assert.True(File.Exists(Path.Combine(root, ".crimson", "raw-current", "targets", "notes", "Runtime", "summary.txt")));
-    Assert.True(File.Exists(Path.Combine(root, ".crimson", "raw-current", "targets", "notes", "Hooks", "Notebook.hooks.txt")));
+    Assert.True(File.Exists(Path.Combine(root, ".merge", "current", "targets", "notes", "Runtime", "summary.txt")));
+    Assert.True(File.Exists(Path.Combine(root, ".merge", "current", "targets", "notes", "Hooks", "Notebook.hooks.txt")));
 }
 
 static void WorkspaceBuildsMultipleConfiguredTargets()
@@ -572,7 +572,7 @@ static void WriteContract(string root, string relativePath, string content)
 
 static string ReadGenerated(string root, params string[] segments)
 {
-    var path = Path.Combine([root, ".crimson", "raw-current", "targets", "csharp", .. segments]);
+    var path = Path.Combine([root, ".merge", "current", "targets", "csharp", .. segments]);
     return File.ReadAllText(path);
 }
 

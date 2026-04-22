@@ -163,9 +163,9 @@ void InitCreatesGitIgnoreEntries()
     }
 
     var contents = File.ReadAllText(gitIgnore);
-    AssertContains(".crimson/raw-previous/", contents);
-    AssertContains(".crimson/raw-current/", contents);
-    AssertContains(".crimson/merge-backup/", contents);
+    AssertContains(".merge/previous/", contents);
+    AssertContains(".merge/current/", contents);
+    AssertContains(".merge/backup/", contents);
 }
 
 void MsBuildIntegrationRespectsConfiguredOutputRoot()

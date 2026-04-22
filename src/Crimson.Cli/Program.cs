@@ -142,7 +142,7 @@ static void PrintUsage()
     Console.WriteLine("  init      Create a new Crimson project directory, project file, state folder, and .gitignore.");
     Console.WriteLine("  parse     Parse a single .idl file and emit the typed JSON AST.");
     Console.WriteLine("  validate  Parse and validate a Crimson project without generating output.");
-    Console.WriteLine("  generate  Generate staged raw output into .crimson/raw-current.");
+    Console.WriteLine("  generate  Generate staged output into .merge/current.");
     Console.WriteLine("  merge     Merge staged output into the live project tree.");
     Console.WriteLine("  build     Generate and merge in one step.");
     Console.WriteLine();

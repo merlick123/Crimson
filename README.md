@@ -173,6 +173,10 @@ It demonstrates:
 
 See `CONTRIBUTING.md`.
 
+## Design Notes
+
+Project design goals are documented in `docs/design-goals.md`.
+
 ## Security
 
 See `SECURITY.md`.
