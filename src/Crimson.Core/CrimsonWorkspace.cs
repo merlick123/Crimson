@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Crimson.Core.Generation;
 using Crimson.Core.Generation.CSharp;
 using Crimson.Core.Merge;
 using Crimson.Core.Model;
@@ -11,9 +12,24 @@ namespace Crimson.Core;
 public sealed class CrimsonWorkspace
 {
     private readonly CrimsonCompiler _compiler = new();
-    private readonly CSharpEmitter _csharpEmitter = new();
     private readonly TreeMergeEngine _mergeEngine = new();
     private readonly CrimsonValidator _validator = new();
+    private readonly IReadOnlyDictionary<string, ITargetEmitter> _emitters;
+
+    public CrimsonWorkspace(IEnumerable<ITargetEmitter>? emitters = null)
+    {
+        var configuredEmitters = (emitters ?? [new CSharpTargetEmitter()])
+            .ToArray();
+
+        _emitters = configuredEmitters
+            .GroupBy(static emitter => emitter.TargetName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                static group => group.Key,
+                static group => group.Count() == 1
+                    ? group.Single()
+                    : throw new InvalidOperationException($"Multiple target emitters were registered for '{group.Key}'."),
+                StringComparer.OrdinalIgnoreCase);
+    }
 
     public CompilationUnitModel ParseFile(string filePath) =>
         _compiler.ParseFile(filePath);
@@ -36,27 +52,28 @@ public sealed class CrimsonWorkspace
         var fullPath = Path.GetFullPath(projectFilePath);
         var directory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("Project directory not found.");
         Directory.CreateDirectory(directory);
+        var defaultTargets = _emitters.Values
+            .Select(emitter => (emitter.TargetName, Options: emitter.GetDefaultProjectOptions()))
+            .Where(static entry => entry.Options is not null)
+            .ToDictionary(static entry => entry.TargetName, static entry => entry.Options!, StringComparer.OrdinalIgnoreCase);
         var project = new
         {
             sources = new[] { "contracts/**/*.idl" },
             excludes = Array.Empty<string>(),
-            targets = new
-            {
-                csharp = new
-                {
-                    output = "src",
-                },
-            },
+            targets = defaultTargets,
         };
 
         File.WriteAllText(fullPath, JsonSerializer.Serialize(project, JsonDefaults.Options));
         Directory.CreateDirectory(Path.Combine(directory, "contracts"));
-        Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-previous", "User"));
-        Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-previous", "Generated"));
-        Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-current"));
+        Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-previous", "targets"));
+        Directory.CreateDirectory(Path.Combine(directory, ".crimson", "raw-current", "targets"));
         Directory.CreateDirectory(Path.Combine(directory, ".crimson", "merge-backup"));
-        CSharpBuildIntegration.Write(directory, CSharpTargetOptions.Default);
         EnsureGitIgnore(directory);
+
+        foreach (var (targetName, options) in defaultTargets)
+        {
+            _emitters[targetName].PrepareProject(directory, JsonSerializer.SerializeToElement(options, JsonDefaults.Options));
+        }
 
         if (starter)
         {
@@ -67,51 +84,94 @@ public sealed class CrimsonWorkspace
     public void ValidateProject(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
-        ValidateFiles(project.ResolveSourceFiles());
+        var compilation = ValidateFiles(project.ResolveSourceFiles());
+        ValidateTargets(project, compilation);
     }
 
     public void Generate(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
         var model = ValidateFiles(project.ResolveSourceFiles());
-        var target = _csharpEmitter.Emit(model);
-        CSharpBuildIntegration.Write(project.ProjectDirectory, project.ResolveCSharpOptions());
+        var targets = ResolveTargets(project).ToArray();
+        ValidateTargets(project, model, targets);
 
         var rawCurrentRoot = Path.Combine(project.CrimsonStateDirectory, "raw-current");
-        var generatedRoot = Path.Combine(rawCurrentRoot, "Generated");
-        var userRoot = Path.Combine(rawCurrentRoot, "User");
-
         RecreateDirectory(rawCurrentRoot);
-        WriteFiles(generatedRoot, target.GeneratedFiles);
-        WriteFiles(userRoot, target.UserFiles);
+
+        foreach (var target in targets)
+        {
+            target.Emitter.PrepareProject(project.ProjectDirectory, target.Configuration);
+
+            var descriptors = target.Emitter.DescribeOutputs(target.Configuration)
+                .ToDictionary(static descriptor => descriptor.Name, StringComparer.OrdinalIgnoreCase);
+            var outputs = target.Emitter.Emit(model, target.Configuration);
+            var targetRoot = Path.Combine(rawCurrentRoot, "targets", target.Emitter.TargetName);
+
+            foreach (var output in outputs)
+            {
+                if (!descriptors.ContainsKey(output.Name))
+                {
+                    throw new InvalidOperationException($"Emitter '{target.Emitter.TargetName}' emitted undeclared output group '{output.Name}'.");
+                }
+
+                WriteFiles(Path.Combine(targetRoot, output.Name), output.Files);
+            }
+        }
     }
 
     public MergeResult Merge(string projectFilePath)
     {
         var project = CrimsonProjectFile.Load(projectFilePath);
-        var options = project.ResolveCSharpOptions();
+        var targets = ResolveTargets(project).ToArray();
         var stateRoot = project.CrimsonStateDirectory;
         var rawPrevious = Path.Combine(stateRoot, "raw-previous");
         var rawCurrent = Path.Combine(stateRoot, "raw-current");
-        var backupRoot = Path.Combine(stateRoot, "merge-backup");
-        var projectRoot = Path.Combine(project.ProjectDirectory, options.OutputRoot);
 
         Directory.CreateDirectory(rawPrevious);
         Directory.CreateDirectory(rawCurrent);
-        Directory.CreateDirectory(projectRoot);
+        Directory.CreateDirectory(Path.Combine(stateRoot, "merge-backup"));
 
-        _mergeEngine.MirrorGeneratedAsBase(
-            Path.Combine(projectRoot, "Generated"),
-            Path.Combine(rawPrevious, "Generated"));
+        var updated = new List<string>();
+        var deleted = new List<string>();
+        var conflicts = new List<MergeConflict>();
 
-        var result = _mergeEngine.Merge(rawPrevious, projectRoot, rawCurrent, backupRoot);
-        if (result.Conflicts.Count > 0)
+        foreach (var target in targets)
         {
-            return result;
+            var outputRoot = Path.Combine(project.ProjectDirectory, target.Emitter.ResolveOutputRoot(target.Configuration));
+            Directory.CreateDirectory(outputRoot);
+
+            foreach (var descriptor in target.Emitter.DescribeOutputs(target.Configuration))
+            {
+                var previousRoot = Path.Combine(rawPrevious, "targets", target.Emitter.TargetName, descriptor.Name);
+                var currentRoot = Path.Combine(rawCurrent, "targets", target.Emitter.TargetName, descriptor.Name);
+                var projectRoot = Path.Combine(outputRoot, descriptor.RelativeOutputPath);
+                var backupRoot = Path.Combine(stateRoot, "merge-backup", "targets", target.Emitter.TargetName, descriptor.Name);
+
+                MigrateLegacyOutputGroup(Path.Combine(rawPrevious, descriptor.Name), previousRoot);
+                Directory.CreateDirectory(previousRoot);
+                Directory.CreateDirectory(currentRoot);
+
+                if (descriptor.MergeMode == TargetMergeMode.PreferGenerated)
+                {
+                    _mergeEngine.MirrorLocalTreeAsBase(projectRoot, previousRoot);
+                }
+
+                var result = _mergeEngine.Merge(previousRoot, projectRoot, currentRoot, backupRoot);
+                updated.AddRange(result.UpdatedFiles.Select(file => PrefixMergedPath(target, descriptor, file)));
+                deleted.AddRange(result.DeletedFiles.Select(file => PrefixMergedPath(target, descriptor, file)));
+                conflicts.AddRange(result.Conflicts.Select(conflict => new MergeConflict(
+                    PrefixMergedPath(target, descriptor, conflict.RelativePath),
+                    conflict.Reason)));
+            }
+        }
+
+        if (conflicts.Count > 0)
+        {
+            return new MergeResult(updated, deleted, conflicts);
         }
 
         _mergeEngine.ReplaceTree(rawCurrent, rawPrevious);
-        return result;
+        return new MergeResult(updated, deleted, conflicts);
     }
 
     public MergeResult Build(string projectFilePath)
@@ -145,7 +205,7 @@ public sealed class CrimsonWorkspace
         var gitIgnorePath = Path.Combine(projectDirectory, ".gitignore");
         var requiredEntries = new[]
         {
-            ".crimson/raw-previous/Generated/",
+            ".crimson/raw-previous/",
             ".crimson/raw-current/",
             ".crimson/merge-backup/",
         };
@@ -181,4 +241,61 @@ namespace Demo.Contracts {
     }
 }
 """;
+
+    private void ValidateTargets(CrimsonProjectFile project, CompilationSetModel compilation, IReadOnlyList<ConfiguredTarget>? resolvedTargets = null)
+    {
+        foreach (var target in resolvedTargets ?? ResolveTargets(project).ToArray())
+        {
+            target.Emitter.ValidateTarget(compilation, target.Configuration);
+        }
+    }
+
+    private IEnumerable<ConfiguredTarget> ResolveTargets(CrimsonProjectFile project)
+    {
+        foreach (var target in project.Project.Targets.OrderBy(static target => target.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!_emitters.TryGetValue(target.Key, out var emitter))
+            {
+                throw new InvalidOperationException($"No target emitter is registered for '{target.Key}'.");
+            }
+
+            yield return new ConfiguredTarget(emitter, target.Value);
+        }
+    }
+
+    private static string PrefixMergedPath(ConfiguredTarget target, TargetOutputDescriptor descriptor, string relativePath)
+    {
+        var segments = new[] { target.Emitter.ResolveOutputRoot(target.Configuration), descriptor.RelativeOutputPath, relativePath }
+            .Where(static segment => !string.IsNullOrWhiteSpace(segment))
+            .ToArray();
+        return Utility.PathHelpers.NormalizeRelativePath(Path.Combine(segments));
+    }
+
+    private static void MigrateLegacyOutputGroup(string legacyRoot, string targetRoot)
+    {
+        if (!Directory.Exists(legacyRoot))
+        {
+            return;
+        }
+
+        if (Directory.Exists(targetRoot) &&
+            Directory.EnumerateFiles(targetRoot, "*", SearchOption.AllDirectories).Any())
+        {
+            return;
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(legacyRoot, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(targetRoot, Path.GetRelativePath(legacyRoot, directory)));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(legacyRoot, "*", SearchOption.AllDirectories))
+        {
+            var destination = Path.Combine(targetRoot, Path.GetRelativePath(legacyRoot, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(file, destination, overwrite: true);
+        }
+    }
+
+    private sealed record ConfiguredTarget(ITargetEmitter Emitter, JsonElement Configuration);
 }

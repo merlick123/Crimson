@@ -8,11 +8,6 @@ public sealed record CrimsonProject(
     IReadOnlyList<string> Excludes,
     IReadOnlyDictionary<string, JsonElement> Targets);
 
-public sealed record CSharpTargetOptions(string OutputRoot)
-{
-    public static CSharpTargetOptions Default => new("src");
-}
-
 public sealed class CrimsonProjectFile
 {
     public required string ProjectFilePath { get; init; }
@@ -85,20 +80,6 @@ public sealed class CrimsonProjectFile
 
             yield return file;
         }
-    }
-
-    public CSharpTargetOptions ResolveCSharpOptions()
-    {
-        if (!Project.Targets.TryGetValue("csharp", out var element))
-        {
-            return CSharpTargetOptions.Default;
-        }
-
-        var outputRoot = element.TryGetProperty("output", out var outputElement)
-            ? outputElement.GetString()
-            : null;
-
-        return new CSharpTargetOptions(outputRoot ?? CSharpTargetOptions.Default.OutputRoot);
     }
 
     public string CrimsonStateDirectory => Path.Combine(ProjectDirectory, ".crimson");

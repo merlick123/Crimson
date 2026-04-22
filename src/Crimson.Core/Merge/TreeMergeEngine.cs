@@ -71,20 +71,20 @@ public sealed class TreeMergeEngine
         return new MergeResult(updated, deleted, conflicts);
     }
 
-    public void MirrorGeneratedAsBase(string projectGeneratedRoot, string baseGeneratedRoot)
+    public void MirrorLocalTreeAsBase(string localRoot, string baseRoot)
     {
-        if (Directory.Exists(baseGeneratedRoot))
+        if (Directory.Exists(baseRoot))
         {
-            Directory.Delete(baseGeneratedRoot, recursive: true);
+            Directory.Delete(baseRoot, recursive: true);
         }
 
-        if (!Directory.Exists(projectGeneratedRoot))
+        if (!Directory.Exists(localRoot))
         {
-            Directory.CreateDirectory(baseGeneratedRoot);
+            Directory.CreateDirectory(baseRoot);
             return;
         }
 
-        CopyTree(projectGeneratedRoot, baseGeneratedRoot);
+        CopyTree(localRoot, baseRoot);
     }
 
     public void ReplaceTree(string sourceRoot, string destinationRoot)

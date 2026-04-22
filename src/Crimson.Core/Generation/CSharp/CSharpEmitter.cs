@@ -3,8 +3,6 @@ using Crimson.Core.Model;
 
 namespace Crimson.Core.Generation.CSharp;
 
-public sealed record GeneratedFile(string RelativePath, string Content);
-
 public sealed record GeneratedTargetTree(
     IReadOnlyList<GeneratedFile> GeneratedFiles,
     IReadOnlyList<GeneratedFile> UserFiles);

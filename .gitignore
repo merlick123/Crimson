@@ -8,7 +8,7 @@
 .codex
 
 # Crimson project state
-**/.crimson/raw-previous/Generated/
+**/.crimson/raw-previous/
 **/.crimson/raw-current/
 **/.crimson/merge-backup/
 

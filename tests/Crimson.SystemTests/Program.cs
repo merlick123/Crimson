@@ -163,7 +163,7 @@ void InitCreatesGitIgnoreEntries()
     }
 
     var contents = File.ReadAllText(gitIgnore);
-    AssertContains(".crimson/raw-previous/Generated/", contents);
+    AssertContains(".crimson/raw-previous/", contents);
     AssertContains(".crimson/raw-current/", contents);
     AssertContains(".crimson/merge-backup/", contents);
 }

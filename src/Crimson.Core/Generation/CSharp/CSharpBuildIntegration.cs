@@ -1,4 +1,4 @@
-namespace Crimson.Core.Projects;
+namespace Crimson.Core.Generation.CSharp;
 
 public static class CSharpBuildIntegration
 {

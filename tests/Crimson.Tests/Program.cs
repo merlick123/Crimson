@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Crimson.Core;
+using Crimson.Core.Generation;
 using Crimson.Core.Generation.CSharp;
 using Crimson.Core.Model;
 
@@ -21,6 +23,9 @@ var tests = new (string Name, Action Body)[]
     ("Global dot name resolution works", GlobalDotNameResolutionWorks),
     ("Relative name resolution prefers nearer scopes", RelativeNameResolutionPrefersNearerScopes),
     ("Ambiguous type references fail cleanly", AmbiguousTypeReferencesFailCleanly),
+    ("Init uses registered default target emitters", InitUsesRegisteredDefaultTargetEmitters),
+    ("Workspace builds arbitrary target emitters", WorkspaceBuildsArbitraryTargetEmitters),
+    ("Workspace builds multiple configured targets", WorkspaceBuildsMultipleConfiguredTargets),
 };
 
 var failures = new List<string>();
@@ -191,7 +196,7 @@ namespace SmartHome {
     workspace.ValidateProject(projectFile);
     workspace.Generate(projectFile);
 
-    var generatedInterface = Path.Combine(root, ".crimson", "raw-current", "Generated", "SmartHome", "IDemoCamera.g.cs");
+    var generatedInterface = Path.Combine(root, ".crimson", "raw-current", "targets", "csharp", "Generated", "SmartHome", "IDemoCamera.g.cs");
     if (!File.Exists(generatedInterface))
     {
         throw new InvalidOperationException("Expected generated interface output for split namespace declarations.");
@@ -359,9 +364,9 @@ namespace Demo {
 
     project.Workspace.Generate(project.ProjectFile);
 
-    Assert.True(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "Generated", "Demo", "IDevice.g.cs")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "Generated", "Demo", "Device.g.cs")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "User", "Demo", "Device.cs")));
+    Assert.True(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "targets", "csharp", "Generated", "Demo", "IDevice.g.cs")));
+    Assert.False(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "targets", "csharp", "Generated", "Demo", "Device.g.cs")));
+    Assert.False(File.Exists(Path.Combine(project.Root, ".crimson", "raw-current", "targets", "csharp", "User", "Demo", "Device.cs")));
 }
 
 static void NestedTypeResolutionThroughBaseContractWorks()
@@ -470,6 +475,76 @@ namespace Demo {
     Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON100"), "Expected duplicate declaration diagnostic for ambiguous type reference.");
 }
 
+static void InitUsesRegisteredDefaultTargetEmitters()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-unit-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace([new FakeTargetEmitter("notes", defaultOutputRoot: "notes-src", includeByDefault: true)]);
+    var projectFile = Path.Combine(root, "Notes.crimsonproj");
+    workspace.InitProject(projectFile, starter: false);
+
+    var projectJson = JsonNode.Parse(File.ReadAllText(projectFile))?.AsObject()
+        ?? throw new InvalidOperationException("Expected project file JSON.");
+    Assert.Equal("notes-src", projectJson["targets"]?["notes"]?["output"]?.GetValue<string>());
+    Assert.True(File.Exists(Path.Combine(root, ".crimson", "notes", "notes.marker")));
+}
+
+static void WorkspaceBuildsArbitraryTargetEmitters()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-unit-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace([new FakeTargetEmitter("notes", defaultOutputRoot: "notes-src", includeByDefault: true)]);
+    var projectFile = Path.Combine(root, "Notes.crimsonproj");
+    workspace.InitProject(projectFile, starter: false);
+    WriteContract(root, "contracts/notes.idl", """
+namespace Demo {
+    interface Notebook {
+        string title;
+    }
+}
+""");
+
+    var result = workspace.Build(projectFile);
+    Assert.Equal(0, result.Conflicts.Count);
+    Assert.True(File.Exists(Path.Combine(root, "notes-src", "Runtime", "summary.txt")));
+    Assert.True(File.Exists(Path.Combine(root, "notes-src", "Hooks", "Notebook.hooks.txt")));
+    Assert.True(File.Exists(Path.Combine(root, ".crimson", "raw-current", "targets", "notes", "Runtime", "summary.txt")));
+    Assert.True(File.Exists(Path.Combine(root, ".crimson", "raw-current", "targets", "notes", "Hooks", "Notebook.hooks.txt")));
+}
+
+static void WorkspaceBuildsMultipleConfiguredTargets()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-unit-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var workspace = new CrimsonWorkspace([
+        new CSharpTargetEmitter(),
+        new FakeTargetEmitter("notes", defaultOutputRoot: "notes-src", includeByDefault: false),
+    ]);
+    var projectFile = Path.Combine(root, "Test.crimsonproj");
+    workspace.InitProject(projectFile, starter: false);
+
+    var projectJson = JsonNode.Parse(File.ReadAllText(projectFile))?.AsObject()
+        ?? throw new InvalidOperationException("Expected project file JSON.");
+    projectJson["targets"]!["notes"] = JsonNode.Parse("""{ "output": "notes-src" }""");
+    File.WriteAllText(projectFile, projectJson.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+    WriteContract(root, "contracts/device.idl", """
+namespace Demo {
+    interface Device {
+        string name;
+    }
+}
+""");
+
+    var result = workspace.Build(projectFile);
+    Assert.Equal(0, result.Conflicts.Count);
+    Assert.True(File.Exists(Path.Combine(root, "src", "Generated", "Demo", "Device.g.cs")));
+    Assert.True(File.Exists(Path.Combine(root, "notes-src", "Runtime", "summary.txt")));
+}
+
 static string CreateTempIdl(string content)
 {
     var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.idl");
@@ -497,7 +572,7 @@ static void WriteContract(string root, string relativePath, string content)
 
 static string ReadGenerated(string root, params string[] segments)
 {
-    var path = Path.Combine([root, ".crimson", "raw-current", .. segments]);
+    var path = Path.Combine([root, ".crimson", "raw-current", "targets", "csharp", .. segments]);
     return File.ReadAllText(path);
 }
 
@@ -582,3 +657,79 @@ static class Assert
 }
 
 sealed record TestProject(string Root, string ProjectFile, CrimsonWorkspace Workspace);
+
+sealed class FakeTargetEmitter(string targetName, string defaultOutputRoot, bool includeByDefault) : ITargetEmitter
+{
+    public string TargetName => targetName;
+
+    public object? GetDefaultProjectOptions() => includeByDefault
+        ? new { output = defaultOutputRoot }
+        : null;
+
+    public string ResolveOutputRoot(JsonElement configuration) =>
+        configuration.TryGetProperty("output", out var output)
+            ? output.GetString() ?? defaultOutputRoot
+            : defaultOutputRoot;
+
+    public IReadOnlyList<TargetOutputDescriptor> DescribeOutputs(JsonElement configuration) =>
+    [
+        new TargetOutputDescriptor("Runtime", "Runtime", TargetMergeMode.PreferGenerated),
+        new TargetOutputDescriptor("Hooks", "Hooks", TargetMergeMode.ThreeWay),
+    ];
+
+    public void PrepareProject(string projectDirectory, JsonElement configuration)
+    {
+        var markerDirectory = Path.Combine(projectDirectory, ".crimson", targetName);
+        Directory.CreateDirectory(markerDirectory);
+        File.WriteAllText(Path.Combine(markerDirectory, $"{targetName}.marker"), ResolveOutputRoot(configuration));
+    }
+
+    public void ValidateTarget(CompilationSetModel compilation, JsonElement configuration)
+    {
+    }
+
+    public IReadOnlyList<EmittedTargetOutput> Emit(CompilationSetModel compilation, JsonElement configuration)
+    {
+        var interfaces = compilation.Files
+            .SelectMany(file => EnumerateDeclarations(file.Declarations))
+            .OfType<InterfaceDeclaration>()
+            .Select(static declaration => declaration.Name)
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        return
+        [
+            new EmittedTargetOutput("Runtime", [
+                new GeneratedFile("summary.txt", string.Join(",", interfaces)),
+            ]),
+            new EmittedTargetOutput("Hooks", interfaces.Select(static name => new GeneratedFile($"{name}.hooks.txt", $"hook:{name}")).ToArray()),
+        ];
+    }
+
+    private static IEnumerable<Declaration> EnumerateDeclarations(IEnumerable<Declaration> declarations)
+    {
+        foreach (var declaration in declarations)
+        {
+            yield return declaration;
+
+            switch (declaration)
+            {
+                case NamespaceDeclaration namespaceDeclaration:
+                    foreach (var nested in EnumerateDeclarations(namespaceDeclaration.Members))
+                    {
+                        yield return nested;
+                    }
+
+                    break;
+
+                case InterfaceDeclaration interfaceDeclaration:
+                    foreach (var nested in EnumerateDeclarations(interfaceDeclaration.NestedDeclarations))
+                    {
+                        yield return nested;
+                    }
+
+                    break;
+            }
+        }
+    }
+}
