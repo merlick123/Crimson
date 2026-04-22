@@ -1,11 +1,22 @@
 {
-  "sources": [
-    "contracts/**/*.idl"
-  ],
-  "excludes": [],
-  "targets": {
+  "version": 2,
+  "groups": {
     "csharp": {
-      "output": "src"
+      "kind": "csharp",
+      "sources": [
+        "contracts/**/*.idl"
+      ],
+      "excludes": [],
+      "output": "src",
+      "host": {
+        "kind": "dotnet-msbuild",
+        "configuration": {
+          "projectDirectories": [
+            "app"
+          ]
+        }
+      },
+      "configuration": {}
     }
   }
 }

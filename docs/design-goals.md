@@ -58,11 +58,11 @@ Adding a new target should not require:
 
 Crimson uses staged generation plus merge application to avoid overwriting user intent.
 
-Project-local state is split by concern:
+Project-local state is split by group and concern:
 
-- `.merge/previous`: prior staged baseline used for merge comparison
-- `.merge/current`: newly generated staged output
-- `.merge/backup`: backups made while applying merges
+- `.merge/<group>/previous`: prior staged baseline used for merge comparison
+- `.merge/<group>/current`: newly generated staged output
+- `.merge/<group>/backup`: backups made while applying merges
 - `.crimson/`: tool-owned integration assets and related tool state that should not be merged into user-owned output
 
 The merge model should remain conservative. When in doubt, prefer a conflict over an unsafe automatic overwrite.

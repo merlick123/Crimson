@@ -1,19 +1,23 @@
 {
-  "sources": [
-    "contracts/**/*.idl"
-  ],
-  "excludes": [],
-  "targets": {
+  "version": 2,
+  "groups": {
     "rust": {
+      "kind": "rust",
+      "sources": [
+        "contracts/**/*.idl"
+      ],
+      "excludes": [],
       "output": "src",
-      "support": {
-        "provider": "generated",
-        "profile": "std"
+      "host": {
+        "kind": "cargo",
+        "configuration": {}
+      },
+      "configuration": {
+        "support": {
+          "provider": "generated",
+          "profile": "std"
+        }
       }
     }
-  },
-  "host": {
-    "kind": "cargo",
-    "configuration": {}
   }
 }

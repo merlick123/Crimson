@@ -79,12 +79,12 @@ namespace Billing {
     }
 
     var projectJson = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(projectFile));
-    if (!projectJson.TryGetProperty("sources", out _))
+    if (!projectJson.TryGetProperty("groups", out var groups))
     {
         throw new InvalidOperationException("Project file was not initialized correctly.");
     }
 
-    var output = projectJson.GetProperty("targets").GetProperty("csharp").GetProperty("output").GetString();
+    var output = groups.GetProperty("csharp").GetProperty("output").GetString();
     if (!string.Equals(output, "src", StringComparison.Ordinal))
     {
         throw new InvalidOperationException("Project file did not include the default csharp output root.");
@@ -145,8 +145,8 @@ void InitWritesMsBuildIntegration()
     var projectFile = Path.Combine(root, "Billing.crimsonproj");
     workspace.InitProject(projectFile, "csharp", starter: false);
 
-    var props = Path.Combine(root, ".crimson", "msbuild", "Crimson.CSharp.props");
-    var targets = Path.Combine(root, ".crimson", "msbuild", "Crimson.CSharp.targets");
+    var props = Path.Combine(root, ".crimson", "msbuild", "Crimson.csharp.props");
+    var targets = Path.Combine(root, ".crimson", "msbuild", "Crimson.csharp.targets");
 
     if (!File.Exists(props))
     {
@@ -212,9 +212,7 @@ void InitCreatesGitIgnoreEntries()
     }
 
     var contents = File.ReadAllText(gitIgnore);
-    AssertContains(".merge/previous/", contents);
-    AssertContains(".merge/current/", contents);
-    AssertContains(".merge/backup/", contents);
+    AssertContains(".merge/", contents);
     AssertContains("app/bin/", contents);
     AssertContains("app/obj/", contents);
 }
@@ -228,7 +226,7 @@ void CppInitWritesCMakeIntegration()
     var projectFile = Path.Combine(root, "Billing.crimsonproj");
     workspace.InitProject(projectFile, "cpp-cmake", starter: false);
 
-    var cmakeModule = Path.Combine(root, ".crimson", "cmake", "Crimson.Cpp.cmake");
+    var cmakeModule = Path.Combine(root, ".crimson", "cmake", "Crimson.cpp.cmake");
     if (!File.Exists(cmakeModule))
     {
         throw new InvalidOperationException("CMake integration file was not created.");
@@ -374,7 +372,7 @@ void RustCargoInitWritesBuildIntegration()
     var projectFile = Path.Combine(root, "Billing.crimsonproj");
     workspace.InitProject(projectFile, "rust-cargo", starter: false);
 
-    var cargoHelper = Path.Combine(root, ".crimson", "cargo", "Crimson.Cargo.rs");
+    var cargoHelper = Path.Combine(root, ".crimson", "cargo", "Crimson.rust.rs");
     if (!File.Exists(cargoHelper))
     {
         throw new InvalidOperationException("Cargo integration helper was not created.");
@@ -453,7 +451,7 @@ void MsBuildIntegrationRespectsConfiguredOutputRoot()
 
     var projectJson = JsonNode.Parse(File.ReadAllText(projectFile))?.AsObject()
         ?? throw new InvalidOperationException("Project file JSON was not parsed.");
-    projectJson["targets"]!["csharp"]!["output"] = "codegen";
+    projectJson["groups"]!["csharp"]!["output"] = "codegen";
     File.WriteAllText(projectFile, projectJson.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
     Directory.CreateDirectory(Path.Combine(root, "contracts"));
@@ -473,7 +471,7 @@ namespace Billing {
     Directory.CreateDirectory(appDirectory);
     File.WriteAllText(Path.Combine(appDirectory, "App.csproj"), $$"""
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="../.crimson/msbuild/Crimson.CSharp.props" />
+  <Import Project="../.crimson/msbuild/Crimson.csharp.props" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -485,7 +483,7 @@ namespace Billing {
     <CrimsonCommandArguments>run --project &quot;{{cliProjectPath}}&quot; --</CrimsonCommandArguments>
   </PropertyGroup>
 
-  <Import Project="../.crimson/msbuild/Crimson.CSharp.targets" />
+  <Import Project="../.crimson/msbuild/Crimson.csharp.targets" />
 </Project>
 """);
 

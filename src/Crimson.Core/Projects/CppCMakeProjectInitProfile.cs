@@ -13,7 +13,7 @@ public sealed class CppCMakeProjectInitProfile : IProjectInitProfile
         var files = new List<ProjectInitFile>
         {
             new("README.md", RenderReadme(context.ProjectName, "cpp-cmake", "cmake -S . -B build", "cmake --build build", "The generated CMake module runs `crimson build` automatically during configure and build.")),
-            new("CMakeLists.txt", RenderCMakeLists(context.ProjectName)),
+            new("CMakeLists.txt", RenderCMakeLists(context.ProjectName, "cpp")),
             new(Path.Combine("app", "main.cpp"), context.Starter ? StarterMain : DefaultMain),
         };
 
@@ -23,10 +23,16 @@ public sealed class CppCMakeProjectInitProfile : IProjectInitProfile
         }
 
         return new ProjectInitPlan(
-            ["contracts/**/*.idl"],
-            Array.Empty<string>(),
-            [new ProjectInitTarget("cpp", new { output = "cpp" })],
-            new ProjectInitHost("cmake", new { buildDirectory = "build" }),
+            [
+                new ProjectInitGroup(
+                    "cpp",
+                    "cpp",
+                    ["contracts/**/*.idl"],
+                    Array.Empty<string>(),
+                    "cpp",
+                    new { },
+                    new ProjectInitHost("cmake", new { buildDirectory = "build" }))
+            ],
             files);
     }
 
@@ -64,21 +70,21 @@ Project layout:
 - `cpp/generated/`: Crimson-generated C++ headers and sources
 - `cpp/user/`: merge-protected user implementation stubs
 - `app/`: consuming C++ entry point
-- `.crimson/cmake/Crimson.Cpp.cmake`: tool-owned CMake integration helper
+- `.crimson/cmake/Crimson.cpp.cmake`: tool-owned CMake integration helper
 """;
 
-    internal static string RenderCMakeLists(string projectName) => $$"""
+    internal static string RenderCMakeLists(string projectName, string groupName) => $$"""
 cmake_minimum_required(VERSION 3.20)
 project({{projectName}}App LANGUAGES CXX)
 
-include("${CMAKE_CURRENT_SOURCE_DIR}/.crimson/cmake/Crimson.Cpp.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/.crimson/cmake/Crimson.{{groupName}}.cmake")
 
 add_executable({{projectName}}App
     app/main.cpp
 )
 
 target_compile_features({{projectName}}App PRIVATE cxx_std_20)
-crimson_configure_cpp_target({{projectName}}App)
+crimson_configure_{{groupName}}_cpp_target({{projectName}}App)
 """;
 
     internal const string StarterIdl = """

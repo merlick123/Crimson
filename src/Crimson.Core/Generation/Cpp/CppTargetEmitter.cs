@@ -29,8 +29,7 @@ public sealed class CppTargetEmitter : ITargetEmitter
 
     public string TargetName => "cpp";
 
-    public string ResolveOutputRoot(JsonElement configuration) =>
-        ResolveOptions(configuration).OutputRoot;
+    public string DefaultOutputRoot => CppTargetOptions.Default.OutputRoot;
 
     public IReadOnlyList<TargetOutputDescriptor> DescribeOutputs(JsonElement configuration) =>
         OutputDescriptors;

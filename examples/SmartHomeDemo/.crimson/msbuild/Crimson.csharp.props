@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <CrimsonCommand Condition="'$(CrimsonCommand)' == ''">crimson</CrimsonCommand>
+    <CrimsonCommandArguments Condition="'$(CrimsonCommandArguments)' == ''"></CrimsonCommandArguments>
+    <CrimsoncsharpSourceRoot Condition="'$(CrimsoncsharpSourceRoot)' == ''">$(MSBuildThisFileDirectory)../../src</CrimsoncsharpSourceRoot>
+    <NoWarn>$(NoWarn);CS2002</NoWarn>
+  </PropertyGroup>
+</Project>

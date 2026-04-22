@@ -15,23 +15,26 @@ public sealed class CMakeHostIntegration : IHostIntegration
         return [buildDirectory.EndsWith("/", StringComparison.Ordinal) ? buildDirectory : buildDirectory + "/"];
     }
 
-    public void ValidateHost(string projectFilePath, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
+    public void ValidateHost(string projectFilePath, JsonElement configuration, ResolvedHostGroup group)
     {
-        _ = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "cpp");
+        _ = HostIntegrationHelpers.RequireTargetKind(HostName, projectFilePath, group, "cpp");
     }
 
-    public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
+    public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, ResolvedHostGroup group)
     {
-        var cppTarget = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "cpp");
+        var cppTarget = HostIntegrationHelpers.RequireTargetKind(HostName, projectFilePath, group, "cpp");
         var cmakeRoot = Path.Combine(projectDirectory, ".crimson", "cmake");
         Directory.CreateDirectory(cmakeRoot);
         File.WriteAllText(
-            Path.Combine(cmakeRoot, "Crimson.Cpp.cmake"),
+            Path.Combine(cmakeRoot, $"Crimson.{SanitizeGroupName(cppTarget.GroupName)}.cmake"),
             RenderModule(projectFilePath, projectDirectory, cppTarget));
     }
 
-    private static string RenderModule(string projectFilePath, string projectDirectory, ResolvedHostTarget target)
+    private static string RenderModule(string projectFilePath, string projectDirectory, ResolvedHostGroup target)
     {
+        var functionSuffix = SanitizeGroupName(target.GroupName);
+        var configureFunctionName = $"crimson_configure_{functionSuffix}_cpp_target";
+        var buildFunctionName = $"_crimson_{functionSuffix}_run_build";
         var projectFileRelativePath = EscapeCMake(PathHelpers.NormalizeRelativePath(Path.GetRelativePath(projectDirectory, projectFilePath)));
         var sourceGlobs = target.Outputs
             .Where(static output => output.ContentType == TargetOutputContentType.SourceFiles)
@@ -46,7 +49,7 @@ public sealed class CMakeHostIntegration : IHostIntegration
         builder.AppendLine("set(CrimsonCommand \"crimson\" CACHE STRING \"Command used to invoke Crimson\")");
         builder.AppendLine("set(CrimsonCommandArguments \"\" CACHE STRING \"Extra arguments passed before the Crimson subcommand\")");
         builder.AppendLine();
-        builder.AppendLine("function(_crimson_cpp_run_build)");
+        builder.AppendLine($"function({buildFunctionName})");
         builder.AppendLine("  get_filename_component(_crimson_project_root \"${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../..\" ABSOLUTE)");
         builder.AppendLine($"  set(_crimson_project_file \"${{_crimson_project_root}}/{projectFileRelativePath}\")");
         builder.AppendLine("  separate_arguments(_crimson_command_arguments NATIVE_COMMAND \"${CrimsonCommandArguments}\")");
@@ -61,7 +64,7 @@ public sealed class CMakeHostIntegration : IHostIntegration
         builder.AppendLine("  endif()");
         builder.AppendLine("endfunction()");
         builder.AppendLine();
-        builder.AppendLine("function(crimson_configure_cpp_target target_name)");
+        builder.AppendLine($"function({configureFunctionName} target_name)");
         builder.AppendLine("  if(NOT TARGET \"${target_name}\")");
         builder.AppendLine("    message(FATAL_ERROR \"Target '${target_name}' does not exist.\")");
         builder.AppendLine("  endif()");
@@ -72,7 +75,7 @@ public sealed class CMakeHostIntegration : IHostIntegration
         builder.AppendLine("  file(GLOB_RECURSE _crimson_contract_files CONFIGURE_DEPENDS \"${_crimson_project_root}/contracts/*.idl\")");
         builder.AppendLine("  separate_arguments(_crimson_command_arguments NATIVE_COMMAND \"${CrimsonCommandArguments}\")");
         builder.AppendLine();
-        builder.AppendLine("  _crimson_cpp_run_build()");
+        builder.AppendLine($"  {buildFunctionName}()");
         builder.AppendLine();
         builder.AppendLine("  set(_crimson_sources)");
 
@@ -120,4 +123,15 @@ public sealed class CMakeHostIntegration : IHostIntegration
     private static string EscapeCMake(string value) =>
         value.Replace("\\", "/", StringComparison.Ordinal)
             .Replace("\"", "\\\"", StringComparison.Ordinal);
+
+    private static string SanitizeGroupName(string groupName)
+    {
+        var builder = new StringBuilder(groupName.Length);
+        foreach (var character in groupName)
+        {
+            builder.Append(char.IsLetterOrDigit(character) ? char.ToLowerInvariant(character) : '_');
+        }
+
+        return builder.Length == 0 ? "group" : builder.ToString();
+    }
 }

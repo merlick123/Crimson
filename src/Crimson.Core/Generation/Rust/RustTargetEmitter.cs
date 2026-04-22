@@ -40,8 +40,7 @@ public sealed class RustTargetEmitter : ITargetEmitter
 
     public string TargetName => "rust";
 
-    public string ResolveOutputRoot(JsonElement configuration) =>
-        ResolveOptions(configuration).OutputRoot;
+    public string DefaultOutputRoot => RustTargetOptions.Default.OutputRoot;
 
     public IReadOnlyList<TargetOutputDescriptor> DescribeOutputs(JsonElement configuration) =>
         OutputDescriptors;

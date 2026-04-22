@@ -6,17 +6,21 @@ public sealed record ProjectInitContext(
     string ProjectName,
     bool Starter);
 
-public sealed record ProjectInitTarget(string TargetName, object Configuration);
-
 public sealed record ProjectInitHost(string HostName, object Configuration);
+
+public sealed record ProjectInitGroup(
+    string GroupName,
+    string Kind,
+    IReadOnlyList<string> Sources,
+    IReadOnlyList<string> Excludes,
+    string Output,
+    object Configuration,
+    ProjectInitHost? Host);
 
 public sealed record ProjectInitFile(string RelativePath, string Content);
 
 public sealed record ProjectInitPlan(
-    IReadOnlyList<string> Sources,
-    IReadOnlyList<string> Excludes,
-    IReadOnlyList<ProjectInitTarget> Targets,
-    ProjectInitHost? Host,
+    IReadOnlyList<ProjectInitGroup> Groups,
     IReadOnlyList<ProjectInitFile> Files);
 
 public sealed record ProjectInitProfileInfo(

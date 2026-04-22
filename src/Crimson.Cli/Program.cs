@@ -175,7 +175,7 @@ static void PrintUsage()
     Console.WriteLine("  init-profiles  List available init profiles.");
     Console.WriteLine("  parse     Parse a single .idl file and emit the typed JSON AST.");
     Console.WriteLine("  validate  Parse and validate a Crimson project without generating output.");
-    Console.WriteLine("  generate  Generate staged output into .merge/current.");
+    Console.WriteLine("  generate  Generate staged output into .merge/<group>/current.");
     Console.WriteLine("  merge     Merge staged output into the live project tree.");
     Console.WriteLine("  build     Generate and merge in one step.");
     Console.WriteLine();

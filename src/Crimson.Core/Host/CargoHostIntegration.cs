@@ -10,15 +10,15 @@ public sealed class CargoHostIntegration : IHostIntegration
     public IReadOnlyList<string> GetGitIgnoreEntries(JsonElement configuration) =>
         ["target/"];
 
-    public void ValidateHost(string projectFilePath, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
+    public void ValidateHost(string projectFilePath, JsonElement configuration, ResolvedHostGroup group)
     {
-        _ = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "rust");
+        _ = HostIntegrationHelpers.RequireTargetKind(HostName, projectFilePath, group, "rust");
     }
 
-    public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
+    public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, ResolvedHostGroup group)
     {
-        _ = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "rust");
+        var rustGroup = HostIntegrationHelpers.RequireTargetKind(HostName, projectFilePath, group, "rust");
 
-        RustCargoBuildIntegration.Write(projectDirectory, projectFilePath);
+        RustCargoBuildIntegration.Write(projectDirectory, projectFilePath, rustGroup.GroupName);
     }
 }

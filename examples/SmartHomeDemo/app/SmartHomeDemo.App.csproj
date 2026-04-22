@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="../.crimson/msbuild/Crimson.CSharp.props" />
+  <Import Project="../.crimson/msbuild/Crimson.csharp.props" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -12,5 +12,5 @@
     <CrimsonCommandArguments>run --project &quot;$(MSBuildProjectDirectory)/../../../src/Crimson.Cli/Crimson.Cli.csproj&quot; --</CrimsonCommandArguments>
   </PropertyGroup>
 
-  <Import Project="../.crimson/msbuild/Crimson.CSharp.targets" />
+  <Import Project="../.crimson/msbuild/Crimson.csharp.targets" />
 </Project>

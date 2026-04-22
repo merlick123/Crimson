@@ -54,6 +54,7 @@ var tests = new (string Name, Action Body)[]
     ("Init uses selected init profile", InitUsesSelectedInitProfile),
     ("Workspace builds arbitrary target emitters", WorkspaceBuildsArbitraryTargetEmitters),
     ("Workspace builds multiple configured targets", WorkspaceBuildsMultipleConfiguredTargets),
+    ("Workspace builds multiple groups for same emitter kind", WorkspaceBuildsMultipleGroupsForSameEmitterKind),
 };
 
 var failures = new List<string>();
@@ -315,7 +316,7 @@ namespace SmartHome {
     workspace.ValidateProject(projectFile);
     workspace.Generate(projectFile);
 
-    var generatedInterface = Path.Combine(root, ".merge", "current", "targets", "csharp", "Generated", "SmartHome", "IDemoCamera.g.cs");
+    var generatedInterface = CurrentCSharpPath(root, "Generated", "SmartHome", "IDemoCamera.g.cs");
     if (!File.Exists(generatedInterface))
     {
         throw new InvalidOperationException("Expected generated interface output for split namespace declarations.");
@@ -739,7 +740,7 @@ namespace SmartHome {
     var generatedCpp = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "SmartHome", "IDeviceRegistry.g.hpp");
     Assert.Contains("virtual DeviceSnapshot GetLatest() const = 0;", generatedCpp);
     Assert.Contains("virtual ::Crimson::Cpp::List<DeviceSnapshot> GetHistory() const = 0;", generatedCpp);
-    Assert.True(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "GeneratedHeaders", "SmartHome", "DeviceSnapshot.hpp")));
+    Assert.True(File.Exists(CurrentCppPath(project.Root, "GeneratedHeaders", "SmartHome", "DeviceSnapshot.hpp")));
 
     var csharpProject = CreateTempProject();
     WriteContract(csharpProject.Root, "contracts/value.idl", """
@@ -760,7 +761,7 @@ namespace SmartHome {
     var generatedCsharp = ReadGenerated(csharpProject.Root, "Generated", "SmartHome", "IDeviceRegistry.g.cs");
     Assert.Contains("DeviceSnapshot Latest { get; set; }", generatedCsharp);
     Assert.Contains("List<DeviceSnapshot> History { get; set; }", generatedCsharp);
-    Assert.True(File.Exists(Path.Combine(csharpProject.Root, ".merge", "current", "targets", "csharp", "Generated", "SmartHome", "DeviceSnapshot.g.cs")));
+    Assert.True(File.Exists(CurrentCSharpPath(csharpProject.Root, "Generated", "SmartHome", "DeviceSnapshot.g.cs")));
 
     var rustProject = CreateTempProject("rust-cargo");
     WriteContract(rustProject.Root, "contracts/value.idl", """
@@ -781,7 +782,7 @@ namespace SmartHome {
     var generatedRust = ReadGeneratedRust(rustProject.Root, "Generated", "smart_home__device_registry.rs");
     Assert.Contains("fn get_latest(&self) -> crate::generated::smart_home__device_snapshot::DeviceSnapshot;", generatedRust);
     Assert.Contains("fn get_history(&self) -> crate::generated::crimson_support::List<crate::generated::smart_home__device_snapshot::DeviceSnapshot>;", generatedRust);
-    Assert.True(File.Exists(Path.Combine(rustProject.Root, ".merge", "current", "targets", "rust", "Generated", "smart_home__device_snapshot.rs")));
+    Assert.True(File.Exists(CurrentRustPath(rustProject.Root, "Generated", "smart_home__device_snapshot.rs")));
 }
 
 static void StructsRejectInternalMembers()
@@ -867,9 +868,9 @@ namespace Demo {
 
     project.Workspace.Generate(project.ProjectFile);
 
-    Assert.True(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "csharp", "Generated", "Demo", "IDevice.g.cs")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "csharp", "Generated", "Demo", "Device.g.cs")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "csharp", "User", "Demo", "Device.cs")));
+    Assert.True(File.Exists(CurrentCSharpPath(project.Root, "Generated", "Demo", "IDevice.g.cs")));
+    Assert.False(File.Exists(CurrentCSharpPath(project.Root, "Generated", "Demo", "Device.g.cs")));
+    Assert.False(File.Exists(CurrentCSharpPath(project.Root, "User", "Demo", "Device.cs")));
 }
 
 static void AbstractInterfacesEmitOnlyInterfaceProjectionCpp()
@@ -885,10 +886,10 @@ namespace Demo {
 
     project.Workspace.Generate(project.ProjectFile);
 
-    Assert.True(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "GeneratedHeaders", "Demo", "IDevice.g.hpp")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "GeneratedHeaders", "Demo", "Device.g.hpp")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "UserHeaders", "Demo", "Device.hpp")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "UserSources", "Demo", "Device.cpp")));
+    Assert.True(File.Exists(CurrentCppPath(project.Root, "GeneratedHeaders", "Demo", "IDevice.g.hpp")));
+    Assert.False(File.Exists(CurrentCppPath(project.Root, "GeneratedHeaders", "Demo", "Device.g.hpp")));
+    Assert.False(File.Exists(CurrentCppPath(project.Root, "UserHeaders", "Demo", "Device.hpp")));
+    Assert.False(File.Exists(CurrentCppPath(project.Root, "UserSources", "Demo", "Device.cpp")));
 }
 
 static void AbstractInterfacesEmitOnlyInterfaceProjectionRust()
@@ -904,8 +905,8 @@ namespace Demo {
 
     project.Workspace.Generate(project.ProjectFile);
 
-    Assert.True(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "rust", "Generated", "demo__device.rs")));
-    Assert.False(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "rust", "User", "demo__device.rs")));
+    Assert.True(File.Exists(CurrentRustPath(project.Root, "Generated", "demo__device.rs")));
+    Assert.False(File.Exists(CurrentRustPath(project.Root, "User", "demo__device.rs")));
 }
 
 static void RustGeneratedSupportProfilesVaryByTargetConfiguration()
@@ -1205,8 +1206,8 @@ static void InitUsesSelectedInitProfile()
 
     var projectJson = JsonNode.Parse(File.ReadAllText(projectFile))?.AsObject()
         ?? throw new InvalidOperationException("Expected project file JSON.");
-    Assert.Equal("notes-src", projectJson["targets"]?["notes"]?["output"]?.GetValue<string>());
-    Assert.Equal("notes-host", projectJson["host"]?["kind"]?.GetValue<string>());
+    Assert.Equal("notes-src", projectJson["groups"]?["notes"]?["output"]?.GetValue<string>());
+    Assert.Equal("notes-host", projectJson["groups"]?["notes"]?["host"]?["kind"]?.GetValue<string>());
     Assert.True(File.Exists(Path.Combine(root, ".crimson", "notes-host", "notes-host.marker")));
     Assert.True(File.Exists(Path.Combine(root, "contracts", "notes.idl")));
     Assert.Contains("notes-build/", File.ReadAllText(Path.Combine(root, ".gitignore")));
@@ -1235,8 +1236,8 @@ namespace Demo {
     Assert.Equal(0, result.Conflicts.Count);
     Assert.True(File.Exists(Path.Combine(root, "notes-src", "Runtime", "summary.txt")));
     Assert.True(File.Exists(Path.Combine(root, "notes-src", "Hooks", "Notebook.hooks.txt")));
-    Assert.True(File.Exists(Path.Combine(root, ".merge", "current", "targets", "notes", "Runtime", "summary.txt")));
-    Assert.True(File.Exists(Path.Combine(root, ".merge", "current", "targets", "notes", "Hooks", "Notebook.hooks.txt")));
+    Assert.True(File.Exists(Path.Combine(root, ".merge", "notes", "current", "Runtime", "summary.txt")));
+    Assert.True(File.Exists(Path.Combine(root, ".merge", "notes", "current", "Hooks", "Notebook.hooks.txt")));
 }
 
 static void WorkspaceBuildsMultipleConfiguredTargets()
@@ -1259,7 +1260,15 @@ static void WorkspaceBuildsMultipleConfiguredTargets()
 
     var projectJson = JsonNode.Parse(File.ReadAllText(projectFile))?.AsObject()
         ?? throw new InvalidOperationException("Expected project file JSON.");
-    projectJson["targets"]!["notes"] = JsonNode.Parse("""{ "output": "notes-src" }""");
+    projectJson["groups"]!["notes"] = JsonNode.Parse("""
+{
+  "kind": "notes",
+  "sources": ["contracts/**/*.idl"],
+  "excludes": [],
+  "output": "notes-src",
+  "configuration": {}
+}
+""");
     File.WriteAllText(projectFile, projectJson.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
     WriteContract(root, "contracts/device.idl", """
@@ -1274,6 +1283,70 @@ namespace Demo {
     Assert.Equal(0, result.Conflicts.Count);
     Assert.True(File.Exists(Path.Combine(root, "src", "Generated", "Demo", "Device.g.cs")));
     Assert.True(File.Exists(Path.Combine(root, "notes-src", "Runtime", "summary.txt")));
+}
+
+static void WorkspaceBuildsMultipleGroupsForSameEmitterKind()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"crimson-unit-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+
+    var projectFile = Path.Combine(root, "Test.crimsonproj");
+    File.WriteAllText(projectFile, """
+{
+  "version": 2,
+  "groups": {
+    "client": {
+      "kind": "csharp",
+      "sources": [
+        "contracts/shared/**/*.idl"
+      ],
+      "excludes": [],
+      "output": "src-client",
+      "configuration": {}
+    },
+    "admin": {
+      "kind": "csharp",
+      "sources": [
+        "contracts/shared/**/*.idl",
+        "contracts/admin/**/*.idl"
+      ],
+      "excludes": [],
+      "output": "src-admin",
+      "configuration": {}
+    }
+  }
+}
+""");
+
+    WriteContract(root, "contracts/shared/device.idl", """
+namespace Demo {
+    interface Device {
+        string name;
+    }
+}
+""");
+
+    WriteContract(root, "contracts/admin/dashboard.idl", """
+namespace Demo {
+    interface Dashboard {
+        string title;
+    }
+}
+""");
+
+    var workspace = new CrimsonWorkspace();
+    var result = workspace.Build(projectFile);
+    Assert.Equal(0, result.Conflicts.Count);
+
+    Assert.True(File.Exists(Path.Combine(root, "src-client", "Generated", "Demo", "Device.g.cs")));
+    Assert.False(File.Exists(Path.Combine(root, "src-client", "Generated", "Demo", "Dashboard.g.cs")));
+    Assert.True(File.Exists(Path.Combine(root, "src-admin", "Generated", "Demo", "Device.g.cs")));
+    Assert.True(File.Exists(Path.Combine(root, "src-admin", "Generated", "Demo", "Dashboard.g.cs")));
+
+    Assert.True(File.Exists(Path.Combine(root, ".merge", "client", "current", "Generated", "Demo", "Device.g.cs")));
+    Assert.False(File.Exists(Path.Combine(root, ".merge", "client", "current", "Generated", "Demo", "Dashboard.g.cs")));
+    Assert.True(File.Exists(Path.Combine(root, ".merge", "admin", "current", "Generated", "Demo", "Device.g.cs")));
+    Assert.True(File.Exists(Path.Combine(root, ".merge", "admin", "current", "Generated", "Demo", "Dashboard.g.cs")));
 }
 
 static string CreateTempIdl(string content)
@@ -1303,20 +1376,61 @@ static void WriteContract(string root, string relativePath, string content)
 
 static string ReadGenerated(string root, params string[] segments)
 {
-    var path = Path.Combine([root, ".merge", "current", "targets", "csharp", .. segments]);
+    var path = Path.Combine([root, ".merge", "csharp", "current", .. segments]);
     return File.ReadAllText(path);
 }
 
 static string ReadGeneratedCpp(string root, params string[] segments)
 {
-    var path = Path.Combine([root, ".merge", "current", "targets", "cpp", .. segments]);
+    var path = Path.Combine([root, ".merge", "cpp", "current", .. NormalizeCppSegments(segments)]);
     return File.ReadAllText(path);
 }
 
 static string ReadGeneratedRust(string root, params string[] segments)
 {
-    var path = Path.Combine([root, ".merge", "current", "targets", "rust", .. segments]);
+    var path = Path.Combine([root, ".merge", "rust", "current", .. NormalizeRustSegments(segments)]);
     return File.ReadAllText(path);
+}
+
+static string CurrentCSharpPath(string root, params string[] segments) =>
+    Path.Combine([root, ".merge", "csharp", "current", .. segments]);
+
+static string CurrentCppPath(string root, params string[] segments) =>
+    Path.Combine([root, ".merge", "cpp", "current", .. NormalizeCppSegments(segments)]);
+
+static string CurrentRustPath(string root, params string[] segments) =>
+    Path.Combine([root, ".merge", "rust", "current", .. NormalizeRustSegments(segments)]);
+
+static string[] NormalizeCppSegments(string[] segments)
+{
+    if (segments.Length == 0)
+    {
+        return segments;
+    }
+
+    return segments[0] switch
+    {
+        "GeneratedHeaders" => ["generated", "include", .. segments[1..]],
+        "GeneratedSources" => ["generated", "src", .. segments[1..]],
+        "UserHeaders" => ["user", "include", .. segments[1..]],
+        "UserSources" => ["user", "src", .. segments[1..]],
+        _ => segments,
+    };
+}
+
+static string[] NormalizeRustSegments(string[] segments)
+{
+    if (segments.Length == 0)
+    {
+        return segments;
+    }
+
+    return segments[0] switch
+    {
+        "Generated" => ["generated", .. segments[1..]],
+        "User" => ["user", .. segments[1..]],
+        _ => segments,
+    };
 }
 
 static int CountOccurrences(string text, string value)
@@ -1417,10 +1531,16 @@ sealed class FakeProjectInitProfile(
 
     public ProjectInitPlan CreatePlan(ProjectInitContext context) =>
         new(
-            ["contracts/**/*.idl"],
-            Array.Empty<string>(),
-            [new ProjectInitTarget(targetName, new { output = outputRoot })],
-            new ProjectInitHost(hostName, new { scratchDirectory = "notes-build" }),
+            [
+                new ProjectInitGroup(
+                    targetName,
+                    targetName,
+                    ["contracts/**/*.idl"],
+                    Array.Empty<string>(),
+                    outputRoot,
+                    new { },
+                    new ProjectInitHost(hostName, new { scratchDirectory = "notes-build" }))
+            ],
             context.Starter
                 ? [new ProjectInitFile(Path.Combine("contracts", $"{profileId}.idl"), "namespace Demo { interface Notes; }" + Environment.NewLine)]
                 : Array.Empty<ProjectInitFile>());
@@ -1430,10 +1550,7 @@ sealed class FakeTargetEmitter(string targetName, string defaultOutputRoot) : IT
 {
     public string TargetName => targetName;
 
-    public string ResolveOutputRoot(JsonElement configuration) =>
-        configuration.TryGetProperty("output", out var output)
-            ? output.GetString() ?? defaultOutputRoot
-            : defaultOutputRoot;
+    public string DefaultOutputRoot => defaultOutputRoot;
 
     public IReadOnlyList<TargetOutputDescriptor> DescribeOutputs(JsonElement configuration) =>
     [
@@ -1500,18 +1617,18 @@ sealed class FakeHostIntegration(string hostName) : IHostIntegration
             ? [scratchDirectory.GetString() + "/"]
             : Array.Empty<string>();
 
-    public void ValidateHost(string projectFilePath, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
+    public void ValidateHost(string projectFilePath, JsonElement configuration, ResolvedHostGroup group)
     {
-        if (!targets.Any(static target => string.Equals(target.TargetName, "notes", StringComparison.OrdinalIgnoreCase)))
+        if (!string.Equals(group.TargetKind, "notes", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException($"Host integration '{hostName}' requires a 'notes' target.");
         }
     }
 
-    public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
+    public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, ResolvedHostGroup group)
     {
         var markerDirectory = Path.Combine(projectDirectory, ".crimson", hostName);
         Directory.CreateDirectory(markerDirectory);
-        File.WriteAllText(Path.Combine(markerDirectory, $"{hostName}.marker"), targets.Single(static target => string.Equals(target.TargetName, "notes", StringComparison.OrdinalIgnoreCase)).OutputRoot);
+        File.WriteAllText(Path.Combine(markerDirectory, $"{hostName}.marker"), group.OutputRoot);
     }
 }

@@ -1,24 +1,9 @@
-namespace Crimson.Core.Generation.Rust;
-
-public static class RustCargoBuildIntegration
-{
-    public static void Write(string projectDirectory, string projectFilePath, string groupName)
-    {
-        var cargoRoot = Path.Combine(projectDirectory, ".crimson", "cargo");
-        Directory.CreateDirectory(cargoRoot);
-        File.WriteAllText(Path.Combine(cargoRoot, $"Crimson.{SanitizeGroupName(groupName)}.rs"), RenderBuildScript(projectDirectory, projectFilePath));
-    }
-
-    private static string RenderBuildScript(string projectDirectory, string projectFilePath)
-    {
-        var projectFileRelativePath = EscapeRustString(Path.GetRelativePath(projectDirectory, projectFilePath));
-        return $$"""
 fn main() {
     println!("cargo:rerun-if-changed=contracts");
-    println!("cargo:rerun-if-changed={{projectFileRelativePath}}");
+    println!("cargo:rerun-if-changed=SmartHome.Rust.crimsonproj");
 
     let project_file = std::env::var("CRIMSON_PROJECT_FILE")
-        .unwrap_or_else(|_| "{{projectFileRelativePath}}".to_string());
+        .unwrap_or_else(|_| "SmartHome.Rust.crimsonproj".to_string());
     let (command, arguments) = resolve_crimson_command();
 
     let mut process = std::process::Command::new(&command);
@@ -76,23 +61,5 @@ fn find_local_cli_project() -> Option<String> {
         if !current.pop() {
             return None;
         }
-    }
-}
-""";
-    }
-
-    private static string EscapeRustString(string value) =>
-        value.Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("\"", "\\\"", StringComparison.Ordinal);
-
-    private static string SanitizeGroupName(string groupName)
-    {
-        var builder = new System.Text.StringBuilder(groupName.Length);
-        foreach (var character in groupName)
-        {
-            builder.Append(char.IsLetterOrDigit(character) ? character : '_');
-        }
-
-        return builder.Length == 0 ? "Group" : builder.ToString();
     }
 }

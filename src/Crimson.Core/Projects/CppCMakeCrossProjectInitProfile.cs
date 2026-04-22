@@ -13,7 +13,7 @@ public sealed class CppCMakeCrossProjectInitProfile : IProjectInitProfile
         var files = new List<ProjectInitFile>
         {
             new("README.md", CppCMakeProjectInitProfile.RenderReadme(context.ProjectName, "cpp-cmake-cross", "cmake --preset cross-debug", "cmake --build --preset cross-debug", "The preset points at the generated generic toolchain scaffold and the CMake module runs `crimson build` automatically.")),
-            new("CMakeLists.txt", CppCMakeProjectInitProfile.RenderCMakeLists(context.ProjectName)),
+            new("CMakeLists.txt", CppCMakeProjectInitProfile.RenderCMakeLists(context.ProjectName, "cpp")),
             new("CMakePresets.json", CMakePresets),
             new(Path.Combine("cmake", "toolchains", "generic.cmake"), ToolchainFile),
             new(Path.Combine("app", "main.cpp"), context.Starter ? CppCMakeProjectInitProfile.StarterMain : CppCMakeProjectInitProfile.DefaultMain),
@@ -25,10 +25,16 @@ public sealed class CppCMakeCrossProjectInitProfile : IProjectInitProfile
         }
 
         return new ProjectInitPlan(
-            ["contracts/**/*.idl"],
-            Array.Empty<string>(),
-            [new ProjectInitTarget("cpp", new { output = "cpp" })],
-            new ProjectInitHost("cmake", new { buildDirectory = "build" }),
+            [
+                new ProjectInitGroup(
+                    "cpp",
+                    "cpp",
+                    ["contracts/**/*.idl"],
+                    Array.Empty<string>(),
+                    "cpp",
+                    new { },
+                    new ProjectInitHost("cmake", new { buildDirectory = "build" }))
+            ],
             files);
     }
 

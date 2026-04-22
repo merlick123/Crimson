@@ -1,1 +1,1 @@
-include!(".crimson/cargo/Crimson.Cargo.rs");
+include!(".crimson/cargo/Crimson.rust.rs");

@@ -24,18 +24,23 @@ public sealed class RustCargoProjectInitProfile : IProjectInitProfile
         }
 
         return new ProjectInitPlan(
-            ["contracts/**/*.idl"],
-            Array.Empty<string>(),
-            [new ProjectInitTarget("rust", new
-            {
-                output = "src",
-                support = new
-                {
-                    provider = "generated",
-                    profile = "std",
-                },
-            })],
-            new ProjectInitHost("cargo", new { }),
+            [
+                new ProjectInitGroup(
+                    "rust",
+                    "rust",
+                    ["contracts/**/*.idl"],
+                    Array.Empty<string>(),
+                    "src",
+                    new
+                    {
+                        support = new
+                        {
+                            provider = "generated",
+                            profile = "std",
+                        },
+                    },
+                    new ProjectInitHost("cargo", new { }))
+            ],
             files);
     }
 
@@ -80,7 +85,7 @@ Project layout:
 - `src/generated/`: Crimson-generated Rust output
 - `src/user/`: merge-protected user implementation stubs
 - {{entryPoint}}: package entry point
-- `.crimson/cargo/Crimson.Cargo.rs`: tool-owned Cargo build integration helper
+- `.crimson/cargo/Crimson.rust.rs`: tool-owned Cargo build integration helper
 """;
     }
 
@@ -98,7 +103,7 @@ namespace SmartHome {
 """;
 
     private const string BuildScript = """
-include!(".crimson/cargo/Crimson.Cargo.rs");
+include!(".crimson/cargo/Crimson.rust.rs");
 """;
 
     private const string DefaultMain = """
@@ -156,18 +161,23 @@ public sealed class RustCargoNoStdProjectInitProfile : IProjectInitProfile
         }
 
         return new ProjectInitPlan(
-            ["contracts/**/*.idl"],
-            Array.Empty<string>(),
-            [new ProjectInitTarget("rust", new
-            {
-                output = "src",
-                support = new
-                {
-                    provider = "generated",
-                    profile = "no_std",
-                },
-            })],
-            new ProjectInitHost("cargo", new { }),
+            [
+                new ProjectInitGroup(
+                    "rust",
+                    "rust",
+                    ["contracts/**/*.idl"],
+                    Array.Empty<string>(),
+                    "src",
+                    new
+                    {
+                        support = new
+                        {
+                            provider = "generated",
+                            profile = "no_std",
+                        },
+                    },
+                    new ProjectInitHost("cargo", new { }))
+            ],
             files);
     }
 
@@ -213,11 +223,11 @@ Project layout:
 - `src/generated/`: Crimson-generated Rust output
 - `src/user/`: merge-protected user implementation modules
 - `src/lib.rs`: package entry point
-- `.crimson/cargo/Crimson.Cargo.rs`: tool-owned Cargo build integration helper
+- `.crimson/cargo/Crimson.rust.rs`: tool-owned Cargo build integration helper
 """;
 
     private const string BuildScript = """
-include!(".crimson/cargo/Crimson.Cargo.rs");
+include!(".crimson/cargo/Crimson.rust.rs");
 """;
 
     private const string DefaultLibrary = """

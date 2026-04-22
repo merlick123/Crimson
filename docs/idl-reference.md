@@ -253,19 +253,22 @@ namespace SmartHome {
 
 ## Project Files
 
-Crimson project files declare which contracts to load, which targets to emit, and optionally which host integration should own tool-managed assets.
+Crimson project files declare named generation groups, the contracts each group should load, and optionally which host integration should own tool-managed assets for that group.
 
 A minimal project file looks like this:
 
 ```json
 {
-  "sources": [
-    "contracts/**/*.idl"
-  ],
-  "excludes": [],
-  "targets": {
+  "version": 2,
+  "groups": {
     "csharp": {
-      "output": "src"
+      "kind": "csharp",
+      "sources": [
+        "contracts/**/*.idl"
+      ],
+      "excludes": [],
+      "output": "src",
+      "configuration": {}
     }
   }
 }
@@ -273,28 +276,29 @@ A minimal project file looks like this:
 
 Top-level keys:
 
-- `sources`: include globs for `.idl` files, resolved relative to the project file
-- `excludes`: exclude globs applied after `sources`
-- `targets`: named target configurations such as `csharp`, `cpp`, or `rust`
-- `host`: optional host/build-system integration configuration
+- `version`: project schema version. Current value: `2`
+- `groups`: named generation groups. Each group defines `kind`, `sources`, `excludes`, `output`, optional `host`, and emitter-specific `configuration`
 
 Example host-enabled project:
 
 ```json
 {
-  "sources": [
-    "contracts/**/*.idl"
-  ],
-  "excludes": [],
-  "targets": {
+  "version": 2,
+  "groups": {
     "cpp": {
-      "output": "cpp"
-    }
-  },
-  "host": {
-    "kind": "cmake",
-    "configuration": {
-      "buildDirectory": "build"
+      "kind": "cpp",
+      "sources": [
+        "contracts/**/*.idl"
+      ],
+      "excludes": [],
+      "output": "cpp",
+      "host": {
+        "kind": "cmake",
+        "configuration": {
+          "buildDirectory": "build"
+        }
+      },
+      "configuration": {}
     }
   }
 }
@@ -337,10 +341,18 @@ The `cpp` target supports a generic ownership option:
 
 ```json
 {
-  "targets": {
+  "version": 2,
+  "groups": {
     "cpp": {
+      "kind": "cpp",
+      "sources": [
+        "contracts/**/*.idl"
+      ],
+      "excludes": [],
       "output": "cpp",
-      "interfaceHandleStyle": "shared_ptr"
+      "configuration": {
+        "interfaceHandleStyle": "shared_ptr"
+      }
     }
   }
 }
@@ -361,12 +373,20 @@ The default Rust target configuration is:
 
 ```json
 {
-  "targets": {
+  "version": 2,
+  "groups": {
     "rust": {
+      "kind": "rust",
+      "sources": [
+        "contracts/**/*.idl"
+      ],
+      "excludes": [],
       "output": "src",
-      "support": {
-        "provider": "generated",
-        "profile": "std"
+      "configuration": {
+        "support": {
+          "provider": "generated",
+          "profile": "std"
+        }
       }
     }
   }

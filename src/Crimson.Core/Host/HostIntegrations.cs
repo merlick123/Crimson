@@ -7,8 +7,9 @@ public sealed record CrimsonProjectHost(
     string Kind,
     JsonElement Configuration);
 
-public sealed record ResolvedHostTarget(
-    string TargetName,
+public sealed record ResolvedHostGroup(
+    string GroupName,
+    string TargetKind,
     string OutputRoot,
     JsonElement Configuration,
     IReadOnlyList<TargetOutputDescriptor> Outputs);
@@ -19,7 +20,7 @@ public interface IHostIntegration
 
     IReadOnlyList<string> GetGitIgnoreEntries(JsonElement configuration);
 
-    void ValidateHost(string projectFilePath, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets);
+    void ValidateHost(string projectFilePath, JsonElement configuration, ResolvedHostGroup group);
 
-    void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets);
+    void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, ResolvedHostGroup group);
 }

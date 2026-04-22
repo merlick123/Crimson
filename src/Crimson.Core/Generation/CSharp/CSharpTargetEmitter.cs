@@ -21,8 +21,7 @@ public sealed class CSharpTargetEmitter : ITargetEmitter
 
     public string TargetName => "csharp";
 
-    public string ResolveOutputRoot(JsonElement configuration) =>
-        ResolveOptions(configuration).OutputRoot;
+    public string DefaultOutputRoot => CSharpTargetOptions.Default.OutputRoot;
 
     public IReadOnlyList<TargetOutputDescriptor> DescribeOutputs(JsonElement configuration) =>
         OutputDescriptors;

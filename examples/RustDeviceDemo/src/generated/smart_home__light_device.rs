@@ -10,7 +10,7 @@ pub trait LightDeviceContract
 
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct LightDeviceGenerated
 {
     display_name: crate::generated::crimson_support::String,

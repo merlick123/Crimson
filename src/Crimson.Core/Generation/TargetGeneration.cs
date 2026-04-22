@@ -39,7 +39,7 @@ public interface ITargetEmitter
 {
     string TargetName { get; }
 
-    string ResolveOutputRoot(JsonElement configuration);
+    string DefaultOutputRoot { get; }
 
     IReadOnlyList<TargetOutputDescriptor> DescribeOutputs(JsonElement configuration);
 

@@ -19,16 +19,16 @@ public sealed class DotNetMsbuildHostIntegration : IHostIntegration
             .ToArray();
     }
 
-    public void ValidateHost(string projectFilePath, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
+    public void ValidateHost(string projectFilePath, JsonElement configuration, ResolvedHostGroup group)
     {
-        _ = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "csharp");
+        _ = HostIntegrationHelpers.RequireTargetKind(HostName, projectFilePath, group, "csharp");
     }
 
-    public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, IReadOnlyList<ResolvedHostTarget> targets)
+    public void PrepareProject(string projectFilePath, string projectDirectory, JsonElement configuration, ResolvedHostGroup group)
     {
-        var csharpTarget = HostIntegrationHelpers.RequireTarget(HostName, projectFilePath, targets, "csharp");
+        var csharpTarget = HostIntegrationHelpers.RequireTargetKind(HostName, projectFilePath, group, "csharp");
 
-        CSharpBuildIntegration.Write(projectDirectory, new CSharpTargetOptions(csharpTarget.OutputRoot));
+        CSharpBuildIntegration.Write(projectDirectory, csharpTarget.GroupName, new CSharpTargetOptions(csharpTarget.OutputRoot));
     }
 
     private static IReadOnlyList<string> ResolveProjectDirectories(JsonElement configuration)

@@ -23,10 +23,16 @@ public sealed class CSharpProjectInitProfile : IProjectInitProfile
         }
 
         return new ProjectInitPlan(
-            ["contracts/**/*.idl"],
-            Array.Empty<string>(),
-            [new ProjectInitTarget("csharp", new { output = "src" })],
-            new ProjectInitHost("dotnet-msbuild", new { projectDirectories = new[] { "app" } }),
+            [
+                new ProjectInitGroup(
+                    "csharp",
+                    "csharp",
+                    ["contracts/**/*.idl"],
+                    Array.Empty<string>(),
+                    "src",
+                    new { },
+                    new ProjectInitHost("dotnet-msbuild", new { projectDirectories = new[] { "app" } }))
+            ],
             files);
     }
 
@@ -62,7 +68,7 @@ Project layout:
 
     private static string RenderAppProject(string projectName) => $$"""
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="../.crimson/msbuild/Crimson.CSharp.props" />
+  <Import Project="../.crimson/msbuild/Crimson.csharp.props" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -72,7 +78,7 @@ Project layout:
     <CrimsonProjectFile>../{{projectName}}.crimsonproj</CrimsonProjectFile>
   </PropertyGroup>
 
-  <Import Project="../.crimson/msbuild/Crimson.CSharp.targets" />
+  <Import Project="../.crimson/msbuild/Crimson.csharp.targets" />
 </Project>
 """;
 

@@ -17,7 +17,7 @@ Project layout:
 - `src/generated/`: Crimson-generated Rust output
 - `src/user/`: merge-protected user implementation modules
 - `src/main.rs`: package entry point
-- `.crimson/cargo/Crimson.Cargo.rs`: tool-owned Cargo build integration helper
+- `.crimson/cargo/Crimson.rust.rs`: tool-owned Cargo build integration helper
 
 Run it from the repo root:
 

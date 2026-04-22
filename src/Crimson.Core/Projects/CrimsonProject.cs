@@ -5,10 +5,16 @@ using Crimson.Core.Utility;
 namespace Crimson.Core.Projects;
 
 public sealed record CrimsonProject(
+    int Version,
+    IReadOnlyDictionary<string, CrimsonProjectGroup> Groups);
+
+public sealed record CrimsonProjectGroup(
+    string Kind,
     IReadOnlyList<string> Sources,
     IReadOnlyList<string> Excludes,
-    IReadOnlyDictionary<string, JsonElement> Targets,
-    CrimsonProjectHost? Host);
+    string? Output,
+    CrimsonProjectHost? Host,
+    JsonElement Configuration);
 
 public sealed class CrimsonProjectFile
 {
@@ -26,16 +32,18 @@ public sealed class CrimsonProjectFile
             PropertyNameCaseInsensitive = true,
         }) ?? throw new InvalidOperationException("Project file could not be parsed.");
 
+        if (project.Version != 2)
+        {
+            throw new InvalidOperationException($"Unsupported project file version '{project.Version}'. Expected version 2.");
+        }
+
         return new CrimsonProjectFile
         {
             ProjectFilePath = fullPath,
             ProjectDirectory = directory,
             Project = project with
             {
-                Sources = project.Sources ?? Array.Empty<string>(),
-                Excludes = project.Excludes ?? Array.Empty<string>(),
-                Targets = project.Targets ?? new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase),
-                Host = project.Host,
+                Groups = NormalizeGroups(project.Groups),
             },
         };
     }
@@ -62,10 +70,10 @@ public sealed class CrimsonProjectFile
         return Path.Combine(projectDirectory, $"{projectName}.crimsonproj");
     }
 
-    public IEnumerable<string> ResolveSourceFiles()
+    public IEnumerable<string> ResolveSourceFiles(CrimsonProjectGroup group)
     {
-        var includeGlobs = Project.Sources.Select(static x => new SimpleGlob(x)).ToArray();
-        var excludeGlobs = Project.Excludes.Select(static x => new SimpleGlob(x)).ToArray();
+        var includeGlobs = group.Sources.Select(static x => new SimpleGlob(x)).ToArray();
+        var excludeGlobs = group.Excludes.Select(static x => new SimpleGlob(x)).ToArray();
 
         foreach (var file in Directory.EnumerateFiles(ProjectDirectory, "*.idl", SearchOption.AllDirectories))
         {
@@ -86,4 +94,40 @@ public sealed class CrimsonProjectFile
     }
 
     public string MergeStateDirectory => Path.Combine(ProjectDirectory, ".merge");
+
+    private static IReadOnlyDictionary<string, CrimsonProjectGroup> NormalizeGroups(IReadOnlyDictionary<string, CrimsonProjectGroup>? groups)
+    {
+        return (groups ?? new Dictionary<string, CrimsonProjectGroup>(StringComparer.OrdinalIgnoreCase))
+            .ToDictionary(
+                static group => group.Key,
+                static group => NormalizeGroup(group.Value),
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static CrimsonProjectGroup NormalizeGroup(CrimsonProjectGroup group) =>
+        group with
+        {
+            Sources = group.Sources ?? Array.Empty<string>(),
+            Excludes = group.Excludes ?? Array.Empty<string>(),
+            Host = NormalizeHost(group.Host),
+            Configuration = NormalizeConfiguration(group.Configuration),
+        };
+
+    private static CrimsonProjectHost? NormalizeHost(CrimsonProjectHost? host)
+    {
+        if (host is null)
+        {
+            return null;
+        }
+
+        return host with
+        {
+            Configuration = NormalizeConfiguration(host.Configuration),
+        };
+    }
+
+    private static JsonElement NormalizeConfiguration(JsonElement configuration) =>
+        configuration.ValueKind == JsonValueKind.Object
+            ? configuration.Clone()
+            : JsonDocument.Parse("{}").RootElement.Clone();
 }

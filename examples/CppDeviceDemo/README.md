@@ -8,7 +8,7 @@ It demonstrates:
 
 - a host-runnable C++/CMake workflow
 - generated and user-owned C++ code under `cpp/generated` and `cpp/user`
-- reusable CMake integration through `.crimson/cmake/Crimson.Cpp.cmake`
+- reusable CMake integration through `.crimson/cmake/Crimson.cpp.cmake`
 - a small contract and implementation pair without the wider multi-frontend SmartHome scenario
 
 Project layout:
@@ -17,7 +17,7 @@ Project layout:
 - `cpp/generated/`: Crimson-generated C++ headers and sources
 - `cpp/user/`: merge-protected user implementation files
 - `app/`: consuming C++ entry point
-- `.crimson/cmake/Crimson.Cpp.cmake`: tool-owned CMake integration helper
+- `.crimson/cmake/Crimson.cpp.cmake`: tool-owned CMake integration helper
 
 Run it from the example directory:
 
