@@ -77,7 +77,7 @@ Parse an IDL file to JSON:
 crimson parse examples/SmartHomeDemo/contracts/core/smart_home.idl
 ```
 
-DTO-style contracts can be marked with `@value` so generators lower references as concrete values instead of interface-shaped references:
+Value-only types should be declared as `struct`:
 
 ```idl
 namespace Demo {
@@ -86,8 +86,7 @@ namespace Demo {
         Bake,
     }
 
-    @value
-    interface SensorSnapshot {
+    struct SensorSnapshot {
         float64 dry_bulb_c;
         float64 wet_bulb_c;
     }

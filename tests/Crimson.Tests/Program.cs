@@ -25,8 +25,8 @@ var tests = new (string Name, Action Body)[]
     ("Nullable types emit nullable CSharp", NullableTypesEmitNullableCSharp),
     ("Nullable types emit optional and shared_ptr Cpp", NullableTypesEmitNullableCpp),
     ("Enum defaults resolve in generated code", EnumDefaultsResolveInGeneratedCode),
-    ("Value contracts lower to concrete types", ValueContractsLowerToConcreteTypes),
-    ("Abstract value contracts fail validation", AbstractValueContractsFailValidation),
+    ("Structs lower to concrete types", StructsLowerToConcreteTypes),
+    ("Structs reject internal members", StructsRejectInternalMembers),
     ("Cpp raw pointer handle style updates support header", CppRawPointerHandleStyleUpdatesSupportHeader),
     ("Abstract interfaces emit only interface projections", AbstractInterfacesEmitOnlyInterfaceProjection),
     ("Abstract interfaces emit only interface projections for Cpp", AbstractInterfacesEmitOnlyInterfaceProjectionCpp),
@@ -510,13 +510,12 @@ namespace Demo {
     Assert.Contains("private OvenPhase _targetPhase = OvenPhase.Bake;", generatedCsharp);
 }
 
-static void ValueContractsLowerToConcreteTypes()
+static void StructsLowerToConcreteTypes()
 {
     var project = CreateTempProject("cpp-cmake");
     WriteContract(project.Root, "contracts/value.idl", """
 namespace Demo {
-    @value
-    interface SensorSnapshot {
+    struct SensorSnapshot {
         string label;
     }
 
@@ -532,12 +531,12 @@ namespace Demo {
     var generatedCpp = ReadGeneratedCpp(project.Root, "GeneratedHeaders", "Demo", "IController.g.hpp");
     Assert.Contains("virtual SensorSnapshot GetLatest() const = 0;", generatedCpp);
     Assert.Contains("virtual ::Crimson::Cpp::List<SensorSnapshot> GetHistory() const = 0;", generatedCpp);
+    Assert.True(File.Exists(Path.Combine(project.Root, ".merge", "current", "targets", "cpp", "GeneratedHeaders", "Demo", "SensorSnapshot.hpp")));
 
     var csharpProject = CreateTempProject();
     WriteContract(csharpProject.Root, "contracts/value.idl", """
 namespace Demo {
-    @value
-    interface SensorSnapshot {
+    struct SensorSnapshot {
         string label;
     }
 
@@ -553,22 +552,22 @@ namespace Demo {
     var generatedCsharp = ReadGenerated(csharpProject.Root, "Generated", "Demo", "IController.g.cs");
     Assert.Contains("SensorSnapshot Latest { get; set; }", generatedCsharp);
     Assert.Contains("List<SensorSnapshot> History { get; set; }", generatedCsharp);
+    Assert.True(File.Exists(Path.Combine(csharpProject.Root, ".merge", "current", "targets", "csharp", "Generated", "Demo", "SensorSnapshot.g.cs")));
 }
 
-static void AbstractValueContractsFailValidation()
+static void StructsRejectInternalMembers()
 {
     var project = CreateTempProject();
     WriteContract(project.Root, "contracts/value.idl", """
 namespace Demo {
-    @value
-    abstract interface Snapshot {
-        string label;
+    struct Snapshot {
+        internal string label;
     }
 }
 """);
 
     var exception = Assert.Throws<DiagnosticException>(() => project.Workspace.ValidateProject(project.ProjectFile));
-    Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON117"), "Expected abstract value contract diagnostic.");
+    Assert.True(exception.Diagnostics.Any(x => x.Code == "CRIMSON117"), "Expected struct member diagnostic.");
 }
 
 static void CppRawPointerHandleStyleUpdatesSupportHeader()

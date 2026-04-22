@@ -28,6 +28,11 @@ internal sealed class SemanticModelBuilder(string filePath, CommonTokenStream to
             return BuildInterface(interfaceDeclaration, namespacePath, containingTypes);
         }
 
+        if (context.structDeclaration() is { } structDeclaration)
+        {
+            return BuildStruct(structDeclaration, namespacePath, containingTypes);
+        }
+
         if (context.enumDeclaration() is { } enumDeclaration)
         {
             return BuildEnum(enumDeclaration, namespacePath, containingTypes);
@@ -87,6 +92,18 @@ internal sealed class SemanticModelBuilder(string filePath, CommonTokenStream to
             context.interfaceBases()?.typeReference().Select(BuildTypeReference).ToArray() ?? Array.Empty<TypeReference>(),
             members,
             nested,
+            GetSource(context));
+    }
+
+    private StructDeclaration BuildStruct(CrimsonParser.StructDeclarationContext context, IReadOnlyList<string> namespacePath, IReadOnlyList<string> containingTypes)
+    {
+        return new StructDeclaration(
+            context.Identifier().GetText(),
+            namespacePath,
+            containingTypes,
+            BuildAnnotations(context.annotation()),
+            GetDocumentation(context.Start),
+            context.structBody().structMember().Select(BuildStructMember).ToArray(),
             GetSource(context));
     }
 
@@ -168,6 +185,31 @@ internal sealed class SemanticModelBuilder(string filePath, CommonTokenStream to
                     : new DocumentationComment(parameterDoc, new Dictionary<string, string>(), null, [parameterDoc]),
                 GetSource(parameter))).ToArray() ?? Array.Empty<MethodParameter>(),
             GetSource(methodMember));
+    }
+
+    private InterfaceMember BuildStructMember(CrimsonParser.StructMemberContext context)
+    {
+        if (context.constantMember() is { } constantMember)
+        {
+            return new ConstantMemberDeclaration(
+                constantMember.Identifier().GetText(),
+                BuildAnnotations(constantMember.annotation()),
+                GetDocumentation(constantMember.Start),
+                BuildTypeReference(constantMember.typeReference()),
+                constantMember.valueExpression() is null ? null : BuildValueExpression(constantMember.valueExpression()),
+                GetSource(constantMember));
+        }
+
+        var valueMember = context.valueMember();
+        return new ValueMemberDeclaration(
+            valueMember.Identifier().GetText(),
+            BuildAnnotations(valueMember.annotation()),
+            GetDocumentation(valueMember.Start),
+            valueMember.memberModifier().Any(static x => x.READONLY() is not null),
+            valueMember.memberModifier().Any(static x => x.INTERNAL() is not null),
+            BuildTypeReference(valueMember.typeReference()),
+            valueMember.valueExpression() is null ? null : BuildValueExpression(valueMember.valueExpression()),
+            GetSource(valueMember));
     }
 
     private IReadOnlyList<Annotation> BuildAnnotations(IEnumerable<CrimsonParser.AnnotationContext> contexts) =>

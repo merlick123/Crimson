@@ -91,6 +91,7 @@ public sealed record ArrayTypeReference(TypeReference ElementType, int? Length, 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(NamespaceDeclaration), "namespace")]
 [JsonDerivedType(typeof(InterfaceDeclaration), "interface")]
+[JsonDerivedType(typeof(StructDeclaration), "struct")]
 [JsonDerivedType(typeof(EnumDeclaration), "enum")]
 [JsonDerivedType(typeof(ConstantDeclaration), "constant")]
 public abstract record Declaration(
@@ -128,6 +129,16 @@ public sealed record InterfaceDeclaration(
     IReadOnlyList<TypeReference> BaseContracts,
     IReadOnlyList<InterfaceMember> Members,
     IReadOnlyList<Declaration> NestedDeclarations,
+    SourceSpan? Source)
+    : Declaration(Name, NamespacePath, ContainingTypes, Annotations, Documentation, Source);
+
+public sealed record StructDeclaration(
+    string Name,
+    IReadOnlyList<string> NamespacePath,
+    IReadOnlyList<string> ContainingTypes,
+    IReadOnlyList<Annotation> Annotations,
+    DocumentationComment? Documentation,
+    IReadOnlyList<InterfaceMember> Members,
     SourceSpan? Source)
     : Declaration(Name, NamespacePath, ContainingTypes, Annotations, Documentation, Source);
 

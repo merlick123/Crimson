@@ -133,6 +133,10 @@ public sealed class CppEmitter
 
                 break;
 
+            case StructDeclaration structDeclaration:
+                generatedHeaders.Add(new GeneratedFile(GetDeclarationPath(structDeclaration, $"{structDeclaration.Name}.hpp"), RenderStructHeader(structDeclaration)));
+                break;
+
             case EnumDeclaration enumDeclaration:
                 generatedHeaders.Add(new GeneratedFile(GetDeclarationPath(enumDeclaration, $"{enumDeclaration.Name}.g.hpp"), RenderEnumHeader(enumDeclaration)));
                 break;
@@ -362,6 +366,69 @@ public sealed class CppEmitter
         return builder.ToString().TrimEnd() + Environment.NewLine;
     }
 
+    private string RenderStructHeader(StructDeclaration declaration)
+    {
+        var builder = new StringBuilder();
+        var includes = CollectNamedIncludes(
+            declaration.Members.SelectMany(GetMemberTypes),
+            declaration,
+            declaration);
+
+        AppendHeaderPreamble(builder, includes);
+        AppendNamespaceOpen(builder, declaration.NamespacePath);
+        builder.AppendLine($"struct {declaration.Name}");
+        builder.AppendLine("{");
+        builder.AppendLine("public:");
+        builder.AppendLine($"    {declaration.Name}() = default;");
+
+        if (declaration.Members.Count > 0)
+        {
+            builder.AppendLine();
+        }
+
+        foreach (var constantMember in declaration.Members.OfType<ConstantMemberDeclaration>())
+        {
+            builder.AppendLine($"    inline static constexpr {RenderConstantType(constantMember.Type, declaration)} {ToPascalCase(constantMember.Name)} = {RenderValueExpression(constantMember.Value ?? throw new InvalidOperationException($"Constant member '{declaration.QualifiedName}.{constantMember.Name}' must declare a value."), constantMember.Type, declaration)};");
+        }
+
+        if (declaration.Members.OfType<ConstantMemberDeclaration>().Any() && declaration.Members.OfType<ValueMemberDeclaration>().Any())
+        {
+            builder.AppendLine();
+        }
+
+        foreach (var valueMember in declaration.Members.OfType<ValueMemberDeclaration>())
+        {
+            builder.AppendLine($"    {RenderContractType(valueMember.Type, declaration)} Get{ToPascalCase(valueMember.Name)}() const");
+            builder.AppendLine("    {");
+            builder.AppendLine($"        return {ToCamelCase(valueMember.Name)}_;");
+            builder.AppendLine("    }");
+            if (!valueMember.IsReadonly)
+            {
+                builder.AppendLine();
+                builder.AppendLine($"    void Set{ToPascalCase(valueMember.Name)}({RenderContractType(valueMember.Type, declaration)} value)");
+                builder.AppendLine("    {");
+                builder.AppendLine($"        {ToCamelCase(valueMember.Name)}_ = value;");
+                builder.AppendLine("    }");
+            }
+            builder.AppendLine();
+        }
+
+        builder.AppendLine("private:");
+        foreach (var valueMember in declaration.Members.OfType<ValueMemberDeclaration>())
+        {
+            builder.AppendLine($"    {RenderContractType(valueMember.Type, declaration)} {ToCamelCase(valueMember.Name)}_ = {RenderDefaultValue(valueMember.Type, valueMember.DefaultValue, declaration)};");
+        }
+
+        if (!declaration.Members.OfType<ValueMemberDeclaration>().Any())
+        {
+            builder.AppendLine("    // No generated state.");
+        }
+
+        builder.AppendLine("};");
+        AppendNamespaceClose(builder, declaration.NamespacePath);
+        return builder.ToString().TrimEnd() + Environment.NewLine;
+    }
+
     private string RenderEnumHeader(EnumDeclaration declaration)
     {
         var builder = new StringBuilder();
@@ -490,8 +557,8 @@ public sealed class CppEmitter
     private static string GetHeaderIncludePath(Declaration declaration) =>
         declaration switch
         {
-            InterfaceDeclaration interfaceDeclaration when IsValueContract(interfaceDeclaration) => PathHelpers.NormalizeRelativePath(GetDeclarationPath(interfaceDeclaration, $"{interfaceDeclaration.Name}.hpp")),
             InterfaceDeclaration interfaceDeclaration => PathHelpers.NormalizeRelativePath(GetDeclarationPath(interfaceDeclaration, $"I{interfaceDeclaration.Name}.g.hpp")),
+            StructDeclaration structDeclaration => PathHelpers.NormalizeRelativePath(GetDeclarationPath(structDeclaration, $"{structDeclaration.Name}.hpp")),
             EnumDeclaration enumDeclaration => PathHelpers.NormalizeRelativePath(GetDeclarationPath(enumDeclaration, $"{enumDeclaration.Name}.g.hpp")),
             _ => PathHelpers.NormalizeRelativePath(GetDeclarationPath(declaration, $"{declaration.Name}.g.hpp")),
         };
@@ -555,8 +622,7 @@ public sealed class CppEmitter
         }
 
         if (type is NamedTypeReference named &&
-            ResolveNamedDeclaration(named, scope) is InterfaceDeclaration interfaceDeclaration &&
-            !IsValueContract(interfaceDeclaration))
+            ResolveNamedDeclaration(named, scope) is InterfaceDeclaration)
         {
             return renderedType;
         }
@@ -601,7 +667,7 @@ public sealed class CppEmitter
             PrimitiveTypeReference primitive when primitive.Name == "string" => $"{SupportNamespace}::String{{}}",
             PrimitiveTypeReference primitive when primitive.Name == "bool" => "false",
             PrimitiveTypeReference => "0",
-            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is InterfaceDeclaration interfaceDeclaration && !IsValueContract(interfaceDeclaration) => "nullptr",
+            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is InterfaceDeclaration => "nullptr",
             NamedTypeReference named when named.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(named with { IsNullable = false }, scope)}>{{}}",
             NamedTypeReference named => $"{RenderNamedType(named, scope)}{{}}",
             ListTypeReference list when list.IsNullable => $"{SupportNamespace}::Optional<{RenderTypeCore(list with { IsNullable = false }, scope)}>{{}}",
@@ -620,8 +686,8 @@ public sealed class CppEmitter
         var resolved = ResolveNamedDeclaration(named, scope);
         return resolved switch
         {
-            InterfaceDeclaration interfaceDeclaration when IsValueContract(interfaceDeclaration) => RenderResolvedTypeName(interfaceDeclaration, scope, interfaceDeclaration.Name),
             InterfaceDeclaration interfaceDeclaration => $"{SupportNamespace}::InterfaceHandle<{RenderResolvedTypeName(interfaceDeclaration, scope, $"I{interfaceDeclaration.Name}")}>",
+            StructDeclaration structDeclaration => RenderResolvedTypeName(structDeclaration, scope, structDeclaration.Name),
             Declaration declaration => RenderResolvedTypeName(declaration, scope, declaration.Name),
             _ => string.Join("::", named.Segments),
         };
@@ -649,9 +715,6 @@ public sealed class CppEmitter
         var qualifier = new NamedTypeReference(namedValue.Segments.Take(namedValue.Segments.Count - 1).ToArray(), namedValue.IsGlobal, false, namedValue.Source);
         return ResolveNamedDeclaration(qualifier, scope) as EnumDeclaration;
     }
-
-    private static bool IsValueContract(InterfaceDeclaration declaration) =>
-        declaration.Annotations.Any(annotation => string.Equals(annotation.Name.Split('.').Last(), "value", StringComparison.OrdinalIgnoreCase));
 
     private static string RenderResolvedTypeName(Declaration declaration, Declaration scope, string localName)
     {

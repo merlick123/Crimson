@@ -51,6 +51,10 @@ public sealed class CSharpEmitter
 
                 break;
 
+            case StructDeclaration structDeclaration:
+                generatedFiles.Add(new GeneratedFile(GetDeclarationPath(structDeclaration, $"{structDeclaration.Name}.g.cs"), RenderStruct(structDeclaration)));
+                break;
+
             case EnumDeclaration enumDeclaration:
                 generatedFiles.Add(new GeneratedFile(GetDeclarationPath(enumDeclaration, $"{enumDeclaration.Name}.g.cs"), RenderEnum(enumDeclaration)));
                 break;
@@ -227,6 +231,55 @@ public sealed class CSharpEmitter
         return builder.ToString().TrimEnd() + Environment.NewLine;
     }
 
+    private string RenderStruct(StructDeclaration declaration)
+    {
+        var builder = new StringBuilder();
+        var namespaceName = string.Join(".", declaration.NamespacePath);
+
+        if (!string.IsNullOrEmpty(namespaceName))
+        {
+            builder.AppendLine("using System.Collections.Generic;");
+            builder.AppendLine();
+            builder.AppendLine($"namespace {namespaceName};");
+            builder.AppendLine();
+        }
+        else
+        {
+            builder.AppendLine("using System.Collections.Generic;");
+            builder.AppendLine();
+        }
+
+        builder.AppendLine($"public partial struct {declaration.Name}");
+        builder.AppendLine("{");
+
+        foreach (var constantMember in declaration.Members.OfType<ConstantMemberDeclaration>())
+        {
+            builder.AppendLine($"    public const {RenderContractType(constantMember.Type, declaration)} {ToPascalCase(constantMember.Name)} = {RenderValueExpression(constantMember.Value ?? throw new InvalidOperationException($"Constant member '{declaration.QualifiedName}.{constantMember.Name}' must declare a value."), constantMember.Type, declaration)};");
+        }
+
+        if (declaration.Members.OfType<ConstantMemberDeclaration>().Any() && declaration.Members.OfType<ValueMemberDeclaration>().Any())
+        {
+            builder.AppendLine();
+        }
+
+        foreach (var valueMember in declaration.Members.OfType<ValueMemberDeclaration>())
+        {
+            AppendDocs(builder, valueMember.Documentation, 1);
+            builder.AppendLine($"    public {RenderContractType(valueMember.Type, declaration)} {ToPascalCase(valueMember.Name)} {{ get;{(valueMember.IsReadonly ? string.Empty : " set;")} }}");
+            builder.AppendLine();
+        }
+
+        builder.AppendLine($"    public {declaration.Name}()");
+        builder.AppendLine("    {");
+        foreach (var valueMember in declaration.Members.OfType<ValueMemberDeclaration>())
+        {
+            builder.AppendLine($"        {ToPascalCase(valueMember.Name)} = {RenderDefaultValue(valueMember.Type, valueMember.DefaultValue, declaration)};");
+        }
+        builder.AppendLine("    }");
+        builder.AppendLine("}");
+        return builder.ToString().TrimEnd() + Environment.NewLine;
+    }
+
     private static string RenderEnum(EnumDeclaration declaration)
     {
         var builder = new StringBuilder();
@@ -342,7 +395,7 @@ public sealed class CSharpEmitter
             PrimitiveTypeReference primitive when primitive.Name == "bool" => "false",
             PrimitiveTypeReference => "0",
             NamedTypeReference named when ResolveNamedDeclaration(named, scope) is EnumDeclaration => "default",
-            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is InterfaceDeclaration interfaceDeclaration && IsValueContract(interfaceDeclaration) => $"new {RenderResolvedTypeName(interfaceDeclaration, scope, interfaceDeclaration.Name)}()",
+            NamedTypeReference named when ResolveNamedDeclaration(named, scope) is StructDeclaration structDeclaration => $"new {RenderResolvedTypeName(structDeclaration, scope, structDeclaration.Name)}()",
             ListTypeReference list => $"new List<{RenderType(list.ElementType, scope, preferInterfaceContracts: true)}>()",
             SetTypeReference set => $"new HashSet<{RenderType(set.ElementType, scope, preferInterfaceContracts: true)}>()",
             MapTypeReference map => $"new Dictionary<{RenderType(map.KeyType, scope, preferInterfaceContracts: true)}, {RenderType(map.ValueType, scope, preferInterfaceContracts: true)}>()",
@@ -356,8 +409,8 @@ public sealed class CSharpEmitter
         var resolved = ResolveNamedDeclaration(named, scope);
         return resolved switch
         {
-            InterfaceDeclaration interfaceDeclaration when IsValueContract(interfaceDeclaration) => RenderResolvedTypeName(interfaceDeclaration, scope, interfaceDeclaration.Name),
             InterfaceDeclaration interfaceDeclaration when preferInterfaceContracts => RenderResolvedTypeName(interfaceDeclaration, scope, $"I{interfaceDeclaration.Name}"),
+            StructDeclaration structDeclaration => RenderResolvedTypeName(structDeclaration, scope, structDeclaration.Name),
             Declaration declaration => RenderResolvedTypeName(declaration, scope, declaration.Name),
             _ => string.Join(".", named.Segments),
         };
@@ -385,9 +438,6 @@ public sealed class CSharpEmitter
         var qualifier = new NamedTypeReference(namedValue.Segments.Take(namedValue.Segments.Count - 1).ToArray(), namedValue.IsGlobal, false, namedValue.Source);
         return ResolveNamedDeclaration(qualifier, scope) as EnumDeclaration;
     }
-
-    private static bool IsValueContract(InterfaceDeclaration declaration) =>
-        declaration.Annotations.Any(annotation => string.Equals(annotation.Name.Split('.').Last(), "value", StringComparison.OrdinalIgnoreCase));
 
     private static string RenderResolvedTypeName(Declaration declaration, Declaration scope, string localName)
     {

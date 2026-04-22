@@ -94,6 +94,10 @@ public sealed class CrimsonValidator
 
                 break;
 
+            case StructDeclaration structDeclaration:
+                ValidateStruct(structDeclaration);
+                break;
+
             case EnumDeclaration enumDeclaration:
                 ValidateEnum(enumDeclaration);
                 break;
@@ -112,15 +116,6 @@ public sealed class CrimsonValidator
         var scope = declaration.NamespacePath.Concat(declaration.ContainingTypes).Concat([declaration.Name]).ToArray();
         var membersByName = new HashSet<string>(StringComparer.Ordinal);
         var resolvedBases = new List<InterfaceDeclaration>();
-
-        if (HasAnnotation(declaration.Annotations, "value") && declaration.IsAbstract)
-        {
-            _diagnostics.Add(new Diagnostic(
-                "CRIMSON117",
-                $"Interface '{declaration.QualifiedName}' is marked with '@value' but is abstract. Value contracts must be concrete.",
-                "error",
-                declaration.Source));
-        }
 
         foreach (var baseContract in declaration.BaseContracts)
         {
@@ -200,6 +195,45 @@ public sealed class CrimsonValidator
                     ValidateTypeReference(constantMember.Type, scope, constantMember.Source, declaration);
                     ValidateRequiredConstantValue(constantMember.Value, constantMember.Source, $"Constant member '{declaration.QualifiedName}.{constantMember.Name}'");
                     ValidateValueCompatibility(constantMember.Type, constantMember.Value, scope, constantMember.Source, declaration);
+                    break;
+            }
+        }
+    }
+
+    private void ValidateStruct(StructDeclaration declaration)
+    {
+        var scope = declaration.NamespacePath.Concat(declaration.ContainingTypes).Concat([declaration.Name]).ToArray();
+        var membersByName = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var member in declaration.Members)
+        {
+            if (!membersByName.Add(member.Name))
+            {
+                _diagnostics.Add(new Diagnostic("CRIMSON104", $"Struct '{declaration.QualifiedName}' contains duplicate member '{member.Name}'.", "error", member.Source));
+            }
+
+            switch (member)
+            {
+                case ValueMemberDeclaration valueMember:
+                    if (valueMember.IsInternal)
+                    {
+                        _diagnostics.Add(new Diagnostic("CRIMSON117", $"Struct '{declaration.QualifiedName}' member '{valueMember.Name}' cannot be marked internal.", "error", valueMember.Source));
+                    }
+
+                    ValidateNonVoidType(valueMember.Type, valueMember.Source, $"Value member '{declaration.QualifiedName}.{valueMember.Name}'");
+                    ValidateTypeReference(valueMember.Type, scope, valueMember.Source);
+                    ValidateValueCompatibility(valueMember.Type, valueMember.DefaultValue, scope, valueMember.Source);
+                    break;
+
+                case ConstantMemberDeclaration constantMember:
+                    ValidateNonVoidType(constantMember.Type, constantMember.Source, $"Constant member '{declaration.QualifiedName}.{constantMember.Name}'");
+                    ValidateTypeReference(constantMember.Type, scope, constantMember.Source);
+                    ValidateRequiredConstantValue(constantMember.Value, constantMember.Source, $"Constant member '{declaration.QualifiedName}.{constantMember.Name}'");
+                    ValidateValueCompatibility(constantMember.Type, constantMember.Value, scope, constantMember.Source);
+                    break;
+
+                case MethodMemberDeclaration:
+                    _diagnostics.Add(new Diagnostic("CRIMSON118", $"Struct '{declaration.QualifiedName}' cannot declare methods.", "error", member.Source));
                     break;
             }
         }
@@ -625,9 +659,6 @@ public sealed class CrimsonValidator
             ArrayTypeReference array => $"{DescribeType(array.ElementType)}[]",
             _ => typeReference.GetType().Name,
         };
-
-    private static bool HasAnnotation(IEnumerable<Annotation> annotations, string shortName) =>
-        annotations.Any(annotation => string.Equals(annotation.Name.Split('.').Last(), shortName, StringComparison.OrdinalIgnoreCase));
 
     private sealed record MemberOrigin(InterfaceDeclaration Origin, InterfaceMember Member);
 }

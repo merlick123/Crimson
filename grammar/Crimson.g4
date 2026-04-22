@@ -7,6 +7,7 @@ compilationUnit
 declaration
     : namespaceDeclaration
     | interfaceDeclaration
+    | structDeclaration
     | enumDeclaration
     | constantDeclaration
     ;
@@ -22,6 +23,20 @@ namespaceBody
 
 interfaceDeclaration
     : annotation* ABSTRACT? INTERFACE Identifier interfaceBases? interfaceBody
+    ;
+
+structDeclaration
+    : annotation* STRUCT Identifier structBody
+    ;
+
+structBody
+    : SEMI
+    | LBRACE structMember* RBRACE
+    ;
+
+structMember
+    : constantMember
+    | valueMember
     ;
 
 interfaceBases
@@ -177,6 +192,7 @@ ABSTRACT: 'abstract';
 NAMESPACE: 'namespace';
 INTERFACE: 'interface';
 ENUM: 'enum';
+STRUCT: 'struct';
 CONST: 'const';
 READONLY: 'readonly';
 INTERNAL: 'internal';

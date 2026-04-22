@@ -63,6 +63,24 @@ public interface ICrimsonVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <return>The visitor result.</return>
 	Result VisitInterfaceDeclaration([NotNull] CrimsonParser.InterfaceDeclarationContext context);
 	/// <summary>
+	/// Visit a parse tree produced by <see cref="CrimsonParser.structDeclaration"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitStructDeclaration([NotNull] CrimsonParser.StructDeclarationContext context);
+	/// <summary>
+	/// Visit a parse tree produced by <see cref="CrimsonParser.structBody"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitStructBody([NotNull] CrimsonParser.StructBodyContext context);
+	/// <summary>
+	/// Visit a parse tree produced by <see cref="CrimsonParser.structMember"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitStructMember([NotNull] CrimsonParser.StructMemberContext context);
+	/// <summary>
 	/// Visit a parse tree produced by <see cref="CrimsonParser.interfaceBases"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>

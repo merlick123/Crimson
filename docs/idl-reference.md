@@ -4,7 +4,7 @@ Crimson IDL describes contracts that lower into generated C# and C++ code.
 
 ## Declarations
 
-Crimson supports four top-level declaration kinds:
+Crimson supports five top-level declaration kinds:
 
 ```idl
 namespace Demo.Contracts {
@@ -13,6 +13,10 @@ namespace Demo.Contracts {
     enum Mode {
         Idle,
         Active,
+    }
+
+    struct SensorSnapshot {
+        float64 dry_bulb_c;
     }
 
     abstract interface Device {
@@ -68,6 +72,34 @@ interface Doorbell : Device, Camera {
     void ring();
 }
 ```
+
+### `struct`
+
+Structs are value-only declarations.
+
+Use them for DTO-style shapes such as:
+
+- snapshots
+- commands
+- configuration objects
+- telemetry records
+
+Example:
+
+```idl
+struct SensorSnapshot {
+    float64 dry_bulb_c;
+    float64 wet_bulb_c;
+    bool door_closed = true;
+}
+```
+
+Rules:
+
+- structs contain value members and constant members
+- structs do not support methods
+- structs do not support inheritance
+- structs lower as concrete value types in code generators
 
 ### `enum`
 
@@ -199,16 +231,13 @@ interface SteamBakeController {
 
 Shorthand enum member references resolve against the declared enum type. Qualified references are also allowed.
 
-## Value Contracts
+## Value Types
 
-Use `@value` on a concrete interface to tell Crimson that references to that contract should lower as concrete values instead of interface contracts.
-
-This is useful for DTO-style contracts such as snapshots, commands, or configuration objects.
+Use `struct` for value-only types:
 
 ```idl
 namespace Demo {
-    @value
-    interface SensorSnapshot {
+    struct SensorSnapshot {
         string label;
         float64 temperature_c;
     }
@@ -220,24 +249,13 @@ namespace Demo {
 }
 ```
 
-Rules:
-
-- `@value` is valid only on concrete interfaces
-- `@value` contracts still generate their interface and implementation artifacts
-- the difference is in how other contracts reference them
-
-Practical effect:
-
-- without `@value`, `SensorSnapshot` lowers like a contract/interface reference
-- with `@value`, `SensorSnapshot` lowers like a value object
-
 ## Annotations
 
 Crimson supports annotations on declarations and parameters:
 
 ```idl
-@value
-interface Snapshot {
+@audit
+struct Snapshot {
     string label;
 }
 ```
@@ -248,11 +266,7 @@ interface Controller {
 }
 ```
 
-Built-in annotation semantics currently include:
-
-- `@value`
-
-Other annotations are preserved in the semantic model for generators and tooling.
+Annotations are preserved in the semantic model for generators and tooling.
 
 ## C++ Target Notes
 
@@ -295,9 +309,8 @@ Common validation failures include:
 - interface inheritance cycles
 - missing constant values
 - incompatible defaults
-- invalid `@value` usage on abstract interfaces
+- invalid struct member modifiers
 
 ## Current Limitations
 
 - the C++ target does not yet support enums with associated values
-- Crimson does not currently have a dedicated `struct` or `record` declaration kind; use `@value` for DTO-style contracts today
